@@ -1,8 +1,6 @@
 package com.akamai.miniwsa.enrichment;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -10,7 +8,8 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Component
+// Not @Component — instantiated and configured by CacheConfig (@Bean), which owns the lifecycle.
+// This keeps the IoC swap point in one place: change CacheConfig to use a different implementation.
 public class InMemoryRepeatOffenderCache implements RepeatOffenderCache {
 
     // Values injected from application.yml — operators can tune without recompiling
