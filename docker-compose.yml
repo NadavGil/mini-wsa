@@ -1,0 +1,44 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mini-wsa-postgres
+    environment:
+      POSTGRES_DB: miniwsa
+      POSTGRES_USER: miniwsa
+      POSTGRES_PASSWORD: miniwsa_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U miniwsa"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: mini-wsa-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: miniwsa
+      DB_USER: miniwsa
+      DB_PASSWORD: miniwsa_secret
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
+volumes:
+  postgres_data:

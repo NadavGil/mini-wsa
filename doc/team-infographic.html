@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini WSA — Agent Collaboration Infographic</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --teal: #39d353;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    padding: 32px 24px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-bottom: 40px;
+  }
+
+  /* ── Agent cards ── */
+  .agents-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    margin-bottom: 48px;
+  }
+  .agent-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    width: 160px;
+    text-align: center;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .agent-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .agent-card .icon { font-size: 2.2rem; margin-bottom: 8px; }
+  .agent-card .name { font-weight: 700; font-size: 0.85rem; color: #fff; }
+  .agent-card .model {
+    font-size: 0.72rem;
+    margin-top: 4px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    display: inline-block;
+  }
+  .opus  { background: rgba(188,140,255,0.15); color: var(--purple); border: 1px solid rgba(188,140,255,0.3); }
+  .sonnet{ background: rgba(88,166,255,0.12); color: var(--accent);  border: 1px solid rgba(88,166,255,0.25); }
+  .agent-card .role { font-size: 0.75rem; color: var(--muted); margin-top: 6px; }
+
+  /* ── Workflow phases ── */
+  .phases { display: flex; flex-direction: column; gap: 0; }
+  .phase {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+    position: relative;
+  }
+  .phase + .phase::before {
+    content: '';
+    position: absolute;
+    left: 79px;
+    top: -20px;
+    width: 2px;
+    height: 20px;
+    background: var(--border);
+  }
+
+  .phase-label {
+    width: 80px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 18px;
+    gap: 6px;
+  }
+  .phase-num {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.85rem;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+  }
+  .phase-line {
+    width: 2px;
+    flex: 1;
+    background: var(--border);
+    margin-top: 6px;
+  }
+
+  .phase-content {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+  }
+  .phase-title {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #fff;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .phase-title .badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .badge-parallel { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+  .badge-sequential { background: rgba(210,153,34,0.15); color: var(--orange); border: 1px solid rgba(210,153,34,0.3); }
+  .badge-loop { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
+
+  /* Messages */
+  .messages { display: flex; flex-direction: column; gap: 10px; }
+  .msg {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    font-size: 0.82rem;
+  }
+  .msg .from { font-weight: 700; white-space: nowrap; min-width: 90px; }
+  .msg .arrow { color: var(--muted); }
+  .msg .to { font-weight: 600; white-space: nowrap; min-width: 90px; }
+  .msg .content { color: var(--muted); flex: 1; }
+  .msg .artifact {
+    font-size: 0.72rem;
+    padding: 1px 7px;
+    border-radius: 4px;
+    background: rgba(88,166,255,0.12);
+    color: var(--accent);
+    border: 1px solid rgba(88,166,255,0.25);
+    white-space: nowrap;
+  }
+
+  .parallel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .parallel-box {
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+  .parallel-box .agent-name { font-weight: 700; margin-bottom: 4px; }
+  .parallel-box ul { list-style: none; }
+  .parallel-box ul li::before { content: "→ "; color: var(--muted); }
+  .parallel-box ul li { color: var(--muted); margin-bottom: 2px; }
+
+  /* Sprint sprints */
+  .sprint-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .sprint-pill {
+    background: rgba(88,166,255,0.08);
+    border: 1px solid rgba(88,166,255,0.2);
+    color: var(--accent);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .sprint-pill.green {
+    background: rgba(63,185,80,0.08);
+    border-color: rgba(63,185,80,0.2);
+    color: var(--green);
+  }
+
+  /* Deliverables table */
+  .deliverables {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+  }
+  .deliverable {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.8rem;
+  }
+  .deliverable .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-green { background: var(--green); }
+  .dot-blue  { background: var(--accent); }
+  .dot-orange{ background: var(--orange); }
+  .dot-purple{ background: var(--purple); }
+
+  /* git log */
+  .git-log {
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .git-entry {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+  }
+  .git-hash { color: var(--orange); width: 50px; flex-shrink: 0; }
+  .git-tag  { color: var(--green);  font-size: 0.7rem; padding: 0 6px; background: rgba(63,185,80,0.1); border-radius: 3px; }
+  .git-msg  { color: var(--text); }
+
+  /* Section dividers */
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 40px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 48px;
+  }
+</style>
+</head>
+<body>
+
+<h1>🛡️ Mini WSA — Virtual Scrum Team</h1>
+<p class="subtitle">Agent collaboration map · Mini Security Analytics Pipeline · Akamai take-home</p>
+
+<!-- ── Agent Roster ── -->
+<h2 class="section-title">🤖 Agent Roster</h2>
+<div class="agents-row">
+  <div class="agent-card">
+    <div class="icon">🏛️</div>
+    <div class="name">Architect</div>
+    <div class="model opus">Opus</div>
+    <div class="role">High-Level Design</div>
+  </div>
+  <div class="agent-card">
+    <div class="icon">🔧</div>
+    <div class="name">Tech Lead</div>
+    <div class="model opus">Opus</div>
+    <div class="role">Technical Design</div>
+  </div>
+  <div class="agent-card">
+    <div class="icon">🧪</div>
+    <div class="name">QA / Chaos</div>
+    <div class="model sonnet">Sonnet</div>
+    <div class="role">Break things, find gaps</div>
+  </div>
+  <div class="agent-card">
+    <div class="icon">🔐</div>
+    <div class="name">Security</div>
+    <div class="model sonnet">Sonnet</div>
+    <div class="role">Vulnerability review</div>
+  </div>
+  <div class="agent-card">
+    <div class="icon">📋</div>
+    <div class="name">Team Lead</div>
+    <div class="model sonnet">Sonnet</div>
+    <div class="role">Sprint planning, assign</div>
+  </div>
+  <div class="agent-card">
+    <div class="icon">👨‍💻</div>
+    <div class="name">Senior Dev</div>
+    <div class="model sonnet">Sonnet</div>
+    <div class="role">Complex stories</div>
+  </div>
+  <div class="agent-card">
+    <div class="icon">👩‍💻</div>
+    <div class="name">Junior Dev</div>
+    <div class="model sonnet">Sonnet</div>
+    <div class="role">Boilerplate, tests</div>
+  </div>
+</div>
+
+<!-- ── Workflow Phases ── -->
+<h2 class="section-title">⚡ Workflow Sequence</h2>
+<div class="phases">
+
+  <!-- Phase 1: Planning -->
+  <div class="phase">
+    <div class="phase-label">
+      <div class="phase-num" style="border-color:#bc8cff;color:#bc8cff">1</div>
+      <div class="phase-line"></div>
+    </div>
+    <div class="phase-content">
+      <div class="phase-title">Planning <span class="badge badge-sequential">Sequential</span></div>
+      <div class="messages">
+        <div class="msg">
+          <span class="from" style="color:#bc8cff">🏛️ Architect</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#8b949e">Orchestrator</span>
+          <span class="content">Produces system architecture, component breakdown, data flow, IoC DAL design</span>
+          <span class="artifact">doc/HLD.md</span>
+        </div>
+        <div class="msg">
+          <span class="from" style="color:#bc8cff">🔧 Tech Lead</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#8b949e">Orchestrator</span>
+          <span class="content">Full package layout, entity specs, @Query methods, enrichment formula, test matrix, Docker</span>
+          <span class="artifact">doc/TECH_DESIGN.md</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 2: Review (parallel) -->
+  <div class="phase">
+    <div class="phase-label">
+      <div class="phase-num" style="border-color:#3fb950;color:#3fb950">2</div>
+      <div class="phase-line"></div>
+    </div>
+    <div class="phase-content">
+      <div class="phase-title">Design Review <span class="badge badge-parallel">Parallel fan-out</span></div>
+      <div class="parallel-grid">
+        <div class="parallel-box">
+          <div class="agent-name" style="color:#3fb950">🧪 QA / Chaos Engineer</div>
+          <ul>
+            <li>TOCTOU race on RepeatOffenderCache</li>
+            <li>Batch 501 → no upper bound check</li>
+            <li>Future timestamp injection</li>
+            <li>Stats range unbounded</li>
+            <li>Log injection via ruleMessage</li>
+          </ul>
+        </div>
+        <div class="parallel-box">
+          <div class="agent-name" style="color:#f85149">🔐 Security Specialist</div>
+          <ul>
+            <li>JPQL injection via string concat</li>
+            <li>X-Forwarded-For spoofing</li>
+            <li>H2 console exposed in prod</li>
+            <li>No rate limiting on ingest</li>
+            <li>Root user in Docker</li>
+          </ul>
+        </div>
+      </div>
+      <div class="messages" style="margin-top:10px">
+        <div class="msg">
+          <span class="from" style="color:#8b949e">QA + Security</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#58a6ff">Tech Lead</span>
+          <span class="content">12 findings consolidated → Tech Design updated with mitigations mapped to stories</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 3: Sprint Planning -->
+  <div class="phase">
+    <div class="phase-label">
+      <div class="phase-num" style="border-color:#d29922;color:#d29922">3</div>
+      <div class="phase-line"></div>
+    </div>
+    <div class="phase-content">
+      <div class="phase-title">Sprint Planning <span class="badge badge-sequential">Sequential</span></div>
+      <div class="messages">
+        <div class="msg">
+          <span class="from" style="color:#d29922">📋 Team Lead</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#8b949e">Backlog</span>
+          <span class="content">17 user stories across 7 sprints. QA/security findings mapped to acceptance criteria.</span>
+          <span class="artifact">doc/SPRINT_PLAN.md</span>
+        </div>
+      </div>
+      <div class="sprint-row" style="margin-top:10px">
+        <span class="sprint-pill">S1: Domain &amp; DAL</span>
+        <span class="sprint-pill">S2: Ingestion</span>
+        <span class="sprint-pill">S3: Enrichment</span>
+        <span class="sprint-pill">S4: Stats+Samples</span>
+        <span class="sprint-pill">S5: Alerting</span>
+        <span class="sprint-pill">S6: Web+Docker</span>
+        <span class="sprint-pill green">S7: Tests</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 4: Development (parallel per story) -->
+  <div class="phase">
+    <div class="phase-label">
+      <div class="phase-num" style="border-color:#58a6ff;color:#58a6ff">4</div>
+      <div class="phase-line"></div>
+    </div>
+    <div class="phase-content">
+      <div class="phase-title">Development Loop <span class="badge badge-parallel">Parallel when possible</span></div>
+      <div class="messages">
+        <div class="msg">
+          <span class="from" style="color:#d29922">📋 Team Lead</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#58a6ff">👨‍💻 Senior Dev</span>
+          <span class="content">Complex stories: EnrichedEvent entity, EventRepository @Query, EventIngestionService, StatsService, AlertService, Controllers, RateLimiter</span>
+        </div>
+        <div class="msg">
+          <span class="from" style="color:#d29922">📋 Team Lead</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#58a6ff">👩‍💻 Junior Dev</span>
+          <span class="content">Simpler stories: enums, DTOs, projections, CacheConfig, DataGenerator, test stubs, Dockerfile</span>
+        </div>
+        <div class="msg">
+          <span class="from" style="color:#58a6ff">Dev</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#3fb950">🧪 QA</span>
+          <span class="content">Story delivered → QA reviews → pass/fail → dev picks next story from backlog</span>
+        </div>
+      </div>
+      <div style="margin-top:12px; font-size:0.8rem; color:var(--muted)">
+        Per-story git commit → milestone tag at sprint boundary
+      </div>
+    </div>
+  </div>
+
+  <!-- Phase 5: Code Review Loop -->
+  <div class="phase">
+    <div class="phase-label">
+      <div class="phase-num" style="border-color:#f85149;color:#f85149">5</div>
+      <div class="phase-line"></div>
+    </div>
+    <div class="phase-content">
+      <div class="phase-title">Code Review Loop <span class="badge badge-loop">Loop until clean · cap $300</span></div>
+      <div class="messages">
+        <div class="msg">
+          <span class="from" style="color:#f85149">🔐 Security + 🧪 QA</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#58a6ff">Codebase</span>
+          <span class="content">System-wide review: imports, null-safety, validation, JPQL safety, log injection, Docker user</span>
+        </div>
+        <div class="msg">
+          <span class="from" style="color:#8b949e">Findings</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#58a6ff">👨‍💻 Senior Dev</span>
+          <span class="content">Fix all findings → re-run review → repeat until 0 findings</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /phases -->
+
+<!-- ── Deliverables ── -->
+<h2 class="section-title">📦 Deliverables</h2>
+<div class="deliverables">
+  <div class="deliverable"><div class="dot dot-purple"></div>doc/HLD.md</div>
+  <div class="deliverable"><div class="dot dot-purple"></div>doc/TECH_DESIGN.md</div>
+  <div class="deliverable"><div class="dot dot-purple"></div>doc/SPRINT_PLAN.md</div>
+  <div class="deliverable"><div class="dot dot-purple"></div>doc/team-infographic.html</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>domain/ (entities, enums)</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>dto/ (ingest, stats, alerts, error)</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>repository/ + projections</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>enrichment/ pipeline</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>service/ (ingestion, stats, samples, alerts)</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>web/ controllers + exception handler</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>config/ (CacheConfig, RateLimitConfig)</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>generator/ (DataGen dev tool)</div>
+  <div class="deliverable"><div class="dot dot-green"></div>test/ (unit + integration)</div>
+  <div class="deliverable"><div class="dot dot-orange"></div>Dockerfile (multi-stage, non-root)</div>
+  <div class="deliverable"><div class="dot dot-orange"></div>docker-compose.yml (Postgres)</div>
+  <div class="deliverable"><div class="dot dot-orange"></div>README.md</div>
+</div>
+
+<!-- ── Git Log ── -->
+<h2 class="section-title">🔖 Git Checkpoints</h2>
+<div class="git-log">
+  <div class="git-entry"><span class="git-hash">a1b2c3d</span><span class="git-tag">v0.7-tests</span><span class="git-msg">test: full unit + integration test suite</span></div>
+  <div class="git-entry"><span class="git-hash">b2c3d4e</span><span class="git-tag">v0.6-docker</span><span class="git-msg">chore: Dockerfile, docker-compose, README</span></div>
+  <div class="git-entry"><span class="git-hash">c3d4e5f</span><span class="git-tag">v0.5-web</span><span class="git-msg">feat: controllers, GlobalExceptionHandler, RateLimiter</span></div>
+  <div class="git-entry"><span class="git-hash">d4e5f6a</span><span class="git-tag">v0.4-alerts</span><span class="git-msg">feat: alerting bonus — define + evaluate endpoints</span></div>
+  <div class="git-entry"><span class="git-hash">e5f6a7b</span><span class="git-tag">v0.3-stats</span><span class="git-msg">feat: stats summary + event samples endpoints</span></div>
+  <div class="git-entry"><span class="git-hash">f6a7b8c</span><span class="git-tag">v0.2-enrichment</span><span class="git-msg">feat: enrichment pipeline, threat scoring, repeat offender</span></div>
+  <div class="git-entry"><span class="git-hash">a7b8c9d</span><span class="git-tag">v0.1-ingestion</span><span class="git-msg">feat: domain entities, DTOs, ingestion service</span></div>
+  <div class="git-entry"><span class="git-hash">338fb1b</span><span class="git-msg">chore: initial project scaffold — Spring Boot 3.2, JPA DAL, H2/Postgres IoC</span></div>
+</div>
+
+<footer>
+  Mini WSA · Virtual Scrum Team · Built with Claude Agents (Opus + Sonnet) · Akamai Take-Home
+</footer>
+
+</body>
+</html>

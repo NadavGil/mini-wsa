@@ -1,0 +1,122 @@
+# Mini WAF Security Analytics (Mini WSA)
+
+A take-home assignment demonstrating a production-grade WAF event ingestion and analytics pipeline built with **Java 17 + Spring Boot 3.2**.
+
+## Architecture Overview
+
+```
+POST /v1/events/ingest  →  EventController  →  EventIngestionService  →  EnrichmentPipeline  →  EventRepository (JPA)
+GET  /v1/stats/summary  →  StatsController  →  StatsService           →  EventRepository
+GET  /v1/events/samples →  EventController  →  SamplesService         →  EventRepository
+POST /v1/alerts/define  →  AlertController  →  AlertService           →  AlertRepository
+GET  /v1/alerts/evaluate→  AlertController  →  AlertService           →  EventRepository
+```
+
+See [`doc/HLD.md`](doc/HLD.md) for the full architecture and [`doc/TECH_DESIGN.md`](doc/TECH_DESIGN.md) for the implementation detail.
+
+## Quick Start
+
+### Dev (H2 in-memory)
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=h2
+```
+
+App starts on `http://localhost:8080`. H2 console disabled by default.
+
+### Production (PostgreSQL)
+
+```bash
+docker-compose up --build
+```
+
+Or with an existing Postgres instance:
+
+```bash
+export DB_HOST=localhost DB_PORT=5432 DB_NAME=miniwsa DB_USER=miniwsa DB_PASSWORD=secret
+mvn spring-boot:run -Dspring-boot.run.profiles=postgres
+```
+
+## API Reference
+
+### Ingest Events
+
+```http
+POST /v1/events/ingest
+Content-Type: application/json
+
+# Single event
+{ "eventId": "uuid", "timestamp": "2024-01-15T10:00:00Z", "configId": 1001,
+  "clientIp": "203.0.113.5", "path": "/api/data", "method": "POST",
+  "statusCode": 403, "rule": { "ruleId": "R001", "severity": "HIGH",
+  "category": "INJECTION" }, "action": "DENY" }
+
+# Batch (array of up to 500)
+[{ ... }, { ... }]
+```
+
+Response `201`:
+```json
+{ "accepted": 1, "eventIds": ["uuid"] }
+```
+
+### Stats Summary
+
+```http
+GET /v1/stats/summary?configId=1001&from=2024-01-15T00:00:00Z&to=2024-01-16T00:00:00Z
+```
+
+### Event Samples
+
+```http
+GET /v1/events/samples?configId=1001&category=INJECTION&limit=20&offset=0
+```
+
+### Define Alert Rule (Bonus)
+
+```http
+POST /v1/alerts/define
+{ "name": "Injection Spike", "category": "INJECTION", "threshold": 100, "windowMinutes": 5 }
+```
+
+### Evaluate Alerts (Bonus)
+
+```http
+GET /v1/alerts/evaluate
+```
+
+### Seed Synthetic Data (dev only)
+
+```http
+POST /dev/generate?count=500&configId=1001
+```
+
+## IoC / DAL Design
+
+Database is swappable via Spring profile — no code changes needed:
+
+| Profile | Database | Use Case |
+|---------|----------|----------|
+| `h2` (default) | H2 in-memory | Local dev, unit tests |
+| `postgres` | PostgreSQL | Staging, production |
+
+The `RepeatOffenderCache` is also injected via IoC (`CacheConfig`). Swap `InMemoryRepeatOffenderCache` for a Redis-backed implementation without touching service code.
+
+## Running Tests
+
+```bash
+mvn test                          # all tests (uses h2 profile)
+mvn test -pl . -Dtest=ThreatScore*  # specific test
+```
+
+## Git Checkpoints
+
+| Tag | Content |
+|-----|---------|
+| `v0.1-ingestion` | Entities, DTOs, ingestion service |
+| `v0.2-enrichment` | Enrichment pipeline, threat scoring |
+| `v0.3-stats` | Stats + samples endpoints |
+| `v0.4-alerts` | Alerting bonus (define + evaluate) |
+| `v0.5-web` | Controllers, exception handler, rate limiter |
+| `v0.6-docker` | Dockerfile, docker-compose, README |
+| `v0.7-tests` | Full test suite |
