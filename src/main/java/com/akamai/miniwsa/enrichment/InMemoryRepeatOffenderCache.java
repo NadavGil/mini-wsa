@@ -17,10 +17,7 @@ public class InMemoryRepeatOffenderCache implements RepeatOffenderCache {
     private final int threshold;
     private final int maxEntries;
 
-    public InMemoryRepeatOffenderCache(
-            @Value("${wsa.cache.window-minutes:10}") int windowMinutes,
-            @Value("${wsa.cache.repeat-offender-threshold:5}") int threshold,
-            @Value("${wsa.cache.max-ip-entries:10000}") int maxEntries) {
+    public InMemoryRepeatOffenderCache(int windowMinutes, int threshold, int maxEntries) {
         this.window = Duration.ofMinutes(windowMinutes);
         this.threshold = threshold;
         this.maxEntries = maxEntries;
