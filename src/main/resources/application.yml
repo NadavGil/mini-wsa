@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: mini-wsa
+  profiles:
+    active: h2
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    time-zone: UTC
+  servlet:
+    multipart:
+      max-request-size: 5MB
+      max-file-size: 5MB
+
+server:
+  port: 8080
+  tomcat:
+    max-http-form-post-size: 1048576
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    path: /swagger
+  api-docs:
+    path: /api-docs
+
+wsa:
+  ingestion:
+    max-batch-size: 500
+    max-future-offset-minutes: 5
+  cache:
+    max-ip-entries: 10000
+    window-minutes: 10
+    repeat-offender-threshold: 5
+  rate-limit:
+    ingest-per-minute: 1000
+    stats-per-minute: 100
+    samples-per-minute: 100
+  stats:
+    max-range-days: 90
+  alerts:
+    max-rules: 100
