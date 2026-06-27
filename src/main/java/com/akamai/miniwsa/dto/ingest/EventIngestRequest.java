@@ -21,6 +21,7 @@ import java.time.Instant;
 public class EventIngestRequest {
 
     @NotBlank
+    @Size(max = 128)   // prevents oversized PK storage; UUID is 36 chars
     private String eventId;
 
     @NotNull

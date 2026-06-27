@@ -17,7 +17,8 @@ spring:
 server:
   port: 8080
   tomcat:
-    max-http-form-post-size: 1048576
+    max-http-form-post-size: 4194304   # 4 MB — covers JSON batch bodies
+    max-swallow-size: 4194304          # prevents Tomcat from buffering oversized requests
   error:
     include-stacktrace: never
     include-message: never
@@ -47,6 +48,7 @@ wsa:
     window-minutes: 10
     repeat-offender-threshold: 5
   rate-limit:
+    requests-per-minute: 200     # global per-IP cap used by RateLimitConfig
     ingest-per-minute: 1000
     stats-per-minute: 100
     samples-per-minute: 100

@@ -42,11 +42,12 @@ public class GlobalExceptionHandler {
                 .map(cv -> new ApiError.FieldViolation(
                         cv.getPropertyPath().toString(), cv.getMessage()))
                 .collect(Collectors.toList());
+        // Do NOT expose ex.getMessage() — it leaks internal class names and Hibernate paths
         ApiError error = new ApiError(
                 Instant.now(),
                 HttpStatus.BAD_REQUEST.value(),
                 "Constraint Violation",
-                ex.getMessage(),
+                "One or more field constraints were violated",
                 violations
         );
         return ResponseEntity.badRequest().body(error);

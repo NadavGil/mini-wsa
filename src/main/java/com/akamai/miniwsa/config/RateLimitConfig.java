@@ -18,10 +18,20 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Per-IP rate limiter using Bucket4j token-bucket algorithm.
- * Default: 200 requests/minute per IP.
+ *
+ * Security note: X-Forwarded-For is deliberately NOT trusted here.
+ * The remote address reported by Tomcat is used because this service is
+ * intended to sit behind a load balancer that strips/replaces XFF.
+ * If deployed behind a trusted proxy, configure Spring's RemoteIpFilter
+ * instead of reading XFF headers directly (prevents IP spoofing attacks).
+ *
+ * The bucket map is capped at MAX_BUCKETS entries to prevent OOM from
+ * IP-exhaustion (unbounded map) attacks.
  */
 @Configuration
 public class RateLimitConfig extends OncePerRequestFilter {
+
+    private static final int MAX_BUCKETS = 50_000;
 
     @Value("${wsa.rate-limit.requests-per-minute:200}")
     private int requestsPerMinute;
@@ -32,8 +42,9 @@ public class RateLimitConfig extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String ip = resolveClientIp(request);
-        Bucket bucket = buckets.computeIfAbsent(ip, this::newBucket);
+        // Use the actual TCP remote address — never trust XFF without a trusted proxy
+        String ip = request.getRemoteAddr();
+        Bucket bucket = getBucket(ip);
 
         if (bucket.tryConsume(1)) {
             chain.doFilter(request, response);
@@ -45,18 +56,23 @@ public class RateLimitConfig extends OncePerRequestFilter {
         }
     }
 
-    private Bucket newBucket(String ip) {
+    private Bucket getBucket(String ip) {
+        Bucket existing = buckets.get(ip);
+        if (existing != null) {
+            return existing;
+        }
+        // Cap map size to prevent OOM under IP-exhaustion attack
+        if (buckets.size() >= MAX_BUCKETS) {
+            String toEvict = buckets.keySet().iterator().next();
+            buckets.remove(toEvict);
+        }
+        return buckets.computeIfAbsent(ip, k -> newBucket());
+    }
+
+    private Bucket newBucket() {
         Bandwidth limit = Bandwidth.classic(
                 requestsPerMinute,
                 Refill.greedy(requestsPerMinute, Duration.ofMinutes(1)));
         return Bucket.builder().addLimit(limit).build();
-    }
-
-    private String resolveClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }

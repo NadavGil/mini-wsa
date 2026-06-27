@@ -120,6 +120,29 @@ class EventIngestionIntegrationTest {
     }
 
     @Test
+    void ingestNullTimestamp_shouldReturn400NotNPE() throws Exception {
+        // Regression: null timestamp must return 400, NOT 500 (NPE)
+        // Previously, EventIngestionService.toEntity() called req.getTimestamp().isAfter(...)
+        // without a null-guard, causing a NullPointerException → 500 instead of 400.
+        Map<String, Object> event = new java.util.HashMap<>();
+        event.put("eventId", UUID.randomUUID().toString());
+        // timestamp deliberately omitted → null after Jackson deserialisation
+        event.put("configId", 1001);
+        event.put("clientIp", "10.0.0.1");
+        event.put("rule", Map.of(
+                "ruleId", "R001",
+                "severity", Severity.HIGH.name(),
+                "category", AttackCategory.INJECTION.name()
+        ));
+        event.put("action", ActionType.DENY.name());
+
+        mockMvc.perform(post("/v1/events/ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(event)))
+                .andExpect(status().isBadRequest());  // 400, not 500
+    }
+
+    @Test
     void ingestFutureTimestamp_shouldReturn422() throws Exception {
         Map<String, Object> event = Map.of(
                 "eventId", UUID.randomUUID().toString(),

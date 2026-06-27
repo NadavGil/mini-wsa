@@ -1,5 +1,6 @@
 package com.akamai.miniwsa.enrichment;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -7,23 +8,32 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class InMemoryRepeatOffenderCache implements RepeatOffenderCache {
 
-    private static final Duration WINDOW = Duration.ofMinutes(10);
-    private static final int THRESHOLD = 5;
-    private static final int MAX_ENTRIES = 10_000;
+    // Values injected from application.yml — operators can tune without recompiling
+    private final Duration window;
+    private final int threshold;
+    private final int maxEntries;
+
+    public InMemoryRepeatOffenderCache(
+            @Value("${wsa.cache.window-minutes:10}") int windowMinutes,
+            @Value("${wsa.cache.repeat-offender-threshold:5}") int threshold,
+            @Value("${wsa.cache.max-ip-entries:10000}") int maxEntries) {
+        this.window = Duration.ofMinutes(windowMinutes);
+        this.threshold = threshold;
+        this.maxEntries = maxEntries;
+    }
 
     // IP → deque of event timestamps (oldest first)
     private final ConcurrentHashMap<String, Deque<Instant>> store = new ConcurrentHashMap<>();
 
     /**
-     * Returns true if there are more than THRESHOLD (5) prior events from this IP
-     * within the rolling WINDOW (10 minutes) before eventTime.
-     * The current event is NOT recorded here — call {@link #record} separately.
+     * Returns true if there are >= threshold prior events from this IP within the
+     * rolling window before eventTime. The current event is NOT recorded here.
+     * Call {@link #record} separately after the DB write succeeds.
      */
     @Override
     public boolean isRepeatOffender(String clientIp, Instant eventTime) {
@@ -31,40 +41,39 @@ public class InMemoryRepeatOffenderCache implements RepeatOffenderCache {
         if (deque == null) {
             return false;
         }
+        // If the scheduler just removed this deque, it was empty → not a repeat offender. Correct.
         synchronized (deque) {
             pruneDeque(deque, eventTime);
-            return deque.size() >= THRESHOLD;
+            return deque.size() >= threshold;
         }
     }
 
     /**
-     * Records an event from clientIp at eventTime into the cache.
-     * Must be called AFTER {@link #isRepeatOffender} to avoid counting the current event.
+     * Records an event from clientIp at eventTime.
+     * Uses ConcurrentHashMap.compute() which is atomic per key bucket, eliminating
+     * the orphaned-deque race where the scheduler removes a deque between
+     * computeIfAbsent and the subsequent synchronized block.
      */
     @Override
     public void record(String clientIp, Instant eventTime) {
-        // Evict one entry if we're at the cap to prevent unbounded memory growth
-        if (!store.containsKey(clientIp) && store.size() >= MAX_ENTRIES) {
-            Iterator<String> it = store.keySet().iterator();
-            if (it.hasNext()) {
-                it.next();
-                it.remove();
+        store.compute(clientIp, (k, existing) -> {
+            // Soft cap: skip new IPs when at capacity
+            if (existing == null && store.size() >= maxEntries) {
+                return null;
             }
-        }
-
-        Deque<Instant> deque = store.computeIfAbsent(clientIp, k -> new ArrayDeque<>());
-        synchronized (deque) {
+            Deque<Instant> deque = (existing != null) ? existing : new ArrayDeque<>();
             deque.addLast(eventTime);
             pruneDeque(deque, eventTime);
-        }
+            return deque;
+        });
     }
 
     /**
-     * Removes entries older than (reference - WINDOW) from the front of the deque.
-     * Must be called under synchronization on the deque.
+     * Removes entries older than (reference - window) from the front of the deque.
+     * Must be called under synchronization on the deque (or inside compute()).
      */
     private void pruneDeque(Deque<Instant> deque, Instant reference) {
-        Instant cutoff = reference.minus(WINDOW);
+        Instant cutoff = reference.minus(window);
         while (!deque.isEmpty() && deque.peekFirst().isBefore(cutoff)) {
             deque.pollFirst();
         }
@@ -72,6 +81,7 @@ public class InMemoryRepeatOffenderCache implements RepeatOffenderCache {
 
     /**
      * Scheduled cleanup: prune stale entries and remove empty deques to reclaim memory.
+     * Uses remove(key, value) which is atomic — safe against concurrent record() calls.
      */
     @Scheduled(fixedRate = 60_000)
     public void pruneEmptyDeques() {

@@ -9,7 +9,9 @@ import com.akamai.miniwsa.service.EventIngestionService;
 import com.akamai.miniwsa.service.SamplesService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.validation.Valid;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/v1/events")
@@ -30,6 +33,8 @@ public class EventController {
     private final EventIngestionService ingestionService;
     private final SamplesService samplesService;
     private final ObjectMapper objectMapper;
+    // Spring Boot auto-configures a Validator bean — inject it, never instantiate per-request
+    private final Validator validator;
 
     /**
      * POST /v1/events/ingest
@@ -52,14 +57,12 @@ public class EventController {
             requests = List.of(single);
         }
 
-        // Manual validation for batch (Jackson conversion bypasses @Valid)
+        // Validate all requests before any enrichment or DB writes
+        // Using the injected singleton Validator — never create a new ValidatorFactory per request
         for (EventIngestRequest req : requests) {
-            var violations = jakarta.validation.Validation
-                    .buildDefaultValidatorFactory()
-                    .getValidator()
-                    .validate(req);
+            Set<ConstraintViolation<EventIngestRequest>> violations = validator.validate(req);
             if (!violations.isEmpty()) {
-                throw new jakarta.validation.ConstraintViolationException(violations);
+                throw new ConstraintViolationException(violations);
             }
         }
 

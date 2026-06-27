@@ -56,7 +56,7 @@ public class AlertService {
 
     private AlertEvaluationResult evaluate(AlertRule rule, Instant now) {
         Instant windowStart = now.minusSeconds((long) rule.getWindowMinutes() * 60L);
-        long observed = eventRepository.countByRuleCategoryAndTimestampAfter(
+        long observed = eventRepository.countByRuleCategoryAndTimestampOnOrAfter(
                 rule.getCategory(), windowStart);
         boolean firing = observed >= rule.getThreshold();
         return new AlertEvaluationResult(

@@ -27,6 +27,17 @@ public class SamplesService {
                                            int limit, int offset) {
         // Clamp limit: 1-100
         int effectiveLimit = Math.min(Math.max(limit, 1), 100);
+
+        // Enforce offset must be a non-negative multiple of effectiveLimit.
+        // Integer-division truncation (e.g. offset=5, limit=20 → page 0, wrong rows)
+        // would silently return wrong data; reject with a clear error instead.
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset must be >= 0");
+        }
+        if (offset % effectiveLimit != 0) {
+            throw new IllegalArgumentException(
+                    "offset (" + offset + ") must be a multiple of limit (" + effectiveLimit + ")");
+        }
         int pageNumber = offset / effectiveLimit;
 
         List<EnrichedEvent> events = eventRepository.findSamples(

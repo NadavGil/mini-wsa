@@ -95,6 +95,9 @@ public interface EventRepository extends JpaRepository<EnrichedEvent, String> {
                       @Param("category") AttackCategory category,
                       @Param("action") ActionType action);
 
-    // Alert evaluation: count events of a given category after a cutoff
-    long countByRuleCategoryAndTimestampAfter(AttackCategory category, Instant cutoff);
+    // Alert evaluation: count events of a given category on or after a cutoff (>= inclusive, matches BETWEEN semantics)
+    @Query("select count(e) from EnrichedEvent e " +
+           "where e.rule.category = :category and e.timestamp >= :from")
+    long countByRuleCategoryAndTimestampOnOrAfter(@Param("category") AttackCategory category,
+                                                   @Param("from") Instant from);
 }

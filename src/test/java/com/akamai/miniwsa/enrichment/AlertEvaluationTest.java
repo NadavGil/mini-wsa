@@ -53,7 +53,7 @@ class AlertEvaluationTest {
     @Test
     void evaluateAll_firing_whenObservedExceedsThreshold() {
         when(alertRepository.findAll()).thenReturn(List.of(injectionRule));
-        when(eventRepository.countByRuleCategoryAndTimestampAfter(
+        when(eventRepository.countByRuleCategoryAndTimestampOnOrAfter(
                 eq(AttackCategory.INJECTION), any(Instant.class)))
                 .thenReturn(15L);
 
@@ -67,7 +67,7 @@ class AlertEvaluationTest {
     @Test
     void evaluateAll_notFiring_whenBelowThreshold() {
         when(alertRepository.findAll()).thenReturn(List.of(injectionRule));
-        when(eventRepository.countByRuleCategoryAndTimestampAfter(
+        when(eventRepository.countByRuleCategoryAndTimestampOnOrAfter(
                 eq(AttackCategory.INJECTION), any(Instant.class)))
                 .thenReturn(5L);
 
@@ -80,7 +80,7 @@ class AlertEvaluationTest {
     @Test
     void evaluateAll_atThreshold_shouldFire() {
         when(alertRepository.findAll()).thenReturn(List.of(injectionRule));
-        when(eventRepository.countByRuleCategoryAndTimestampAfter(
+        when(eventRepository.countByRuleCategoryAndTimestampOnOrAfter(
                 eq(AttackCategory.INJECTION), any(Instant.class)))
                 .thenReturn(10L);  // exactly at threshold
 

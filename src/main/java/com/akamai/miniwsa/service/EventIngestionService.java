@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,28 +28,43 @@ public class EventIngestionService {
     private int maxFutureOffsetMinutes;
 
     /**
-     * Validates, enriches, and persists a batch of ingest requests.
-     * The entire batch is atomic: one failure rolls back all inserts.
+     * Validates, enriches, and persists a batch of ingest requests atomically.
+     *
+     * Two-phase enrichment ensures the repeat-offender cache is never updated
+     * for events that fail to persist (prevents cache poisoning on DB rollback):
+     *   Phase 1 — enrichWithoutRecording(): compute fields, no cache writes.
+     *   Phase 2 — saveAll(): atomic DB write.
+     *   Phase 3 — recordInCache(): update cache only after commit succeeds.
      *
      * @return list of persisted eventIds in insertion order
      */
     public List<String> ingest(List<EventIngestRequest> requests) {
+        // Phase 1: enrich (no cache side-effects)
         List<EnrichedEvent> events = requests.stream()
                 .map(this::toEntity)
-                .map(enrichmentPipeline::enrich)
+                .map(enrichmentPipeline::enrichWithoutRecording)
                 .collect(Collectors.toList());
 
-        return eventRepository.saveAll(events).stream()
+        // Phase 2: persist atomically — rollback leaves cache unaffected
+        List<EnrichedEvent> saved = eventRepository.saveAll(events);
+
+        // Phase 3: record in cache only after successful commit
+        saved.forEach(enrichmentPipeline::recordInCache);
+
+        return saved.stream()
                 .map(EnrichedEvent::getEventId)
                 .collect(Collectors.toList());
     }
 
     private EnrichedEvent toEntity(EventIngestRequest req) {
-        // Reject timestamps that are too far in the future
+        // Null-guard: @NotNull on timestamp is validated upstream by the controller,
+        // but guard here defensively to surface a 422 instead of a 500 if bypassed.
+        Instant ts = Objects.requireNonNull(req.getTimestamp(),
+                "timestamp must not be null");
+
         Instant maxAllowed = Instant.now().plusSeconds((long) maxFutureOffsetMinutes * 60L);
-        if (req.getTimestamp().isAfter(maxAllowed)) {
-            throw new FutureTimestampException(
-                    "Timestamp too far in the future: " + req.getTimestamp());
+        if (ts.isAfter(maxAllowed)) {
+            throw new FutureTimestampException("Timestamp too far in the future: " + ts);
         }
 
         RuleInfo rule = null;
@@ -72,12 +88,12 @@ public class EventIngestionService {
 
         return EnrichedEvent.builder()
                 .eventId(req.getEventId())
-                .timestamp(req.getTimestamp())
+                .timestamp(ts)
                 .configId(req.getConfigId())
                 .policyId(req.getPolicyId())
                 .clientIp(req.getClientIp())
                 .hostname(req.getHostname())
-                .path(sanitizePath(req.getPath()))
+                .path(req.getPath())          // Raw path preserved: JSON serialisation handles XSS; forensic fidelity matters
                 .method(req.getMethod())
                 .statusCode(req.getStatusCode())
                 .userAgent(req.getUserAgent())
@@ -86,22 +102,16 @@ public class EventIngestionService {
                 .geoLocation(geo)
                 .requestSize(req.getRequestSize())
                 .responseSize(req.getResponseSize())
-                .attackType("Unknown")    // overwritten by EnrichmentPipeline
-                .threatScore(0)           // overwritten by EnrichmentPipeline
-                .repeatOffender(false)    // overwritten by EnrichmentPipeline
+                .attackType("Unknown")         // overwritten by EnrichmentPipeline
+                .threatScore(0)                // overwritten by EnrichmentPipeline
+                .repeatOffender(false)         // overwritten by EnrichmentPipeline
                 .ingestedAt(Instant.now())
                 .build();
     }
 
-    /** Strips CR, LF, and TAB to prevent log-injection attacks. */
+    /** Strips CR, LF, and TAB from fields that appear in server logs to prevent log injection. */
     private String sanitizeLogField(String value) {
         if (value == null) return null;
         return value.replaceAll("[\r\n\t]", " ");
-    }
-
-    /** Removes HTML-significant chars from path to prevent reflected XSS. */
-    private String sanitizePath(String path) {
-        if (path == null) return null;
-        return path.replaceAll("[<>\"'`]", "");
     }
 }
