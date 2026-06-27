@@ -2,6 +2,7 @@ package com.akamai.miniwsa.enrichment;
 
 import com.akamai.miniwsa.domain.AlertRule;
 import com.akamai.miniwsa.domain.AttackCategory;
+import org.springframework.test.util.ReflectionTestUtils;
 import com.akamai.miniwsa.dto.alerts.AlertEvaluationResult;
 import com.akamai.miniwsa.dto.alerts.AlertRuleRequest;
 import com.akamai.miniwsa.dto.alerts.AlertRuleResponse;
@@ -40,6 +41,9 @@ class AlertEvaluationTest {
 
     @BeforeEach
     void setUp() {
+        // @Value fields are not injected by Mockito — set explicitly
+        ReflectionTestUtils.setField(alertService, "maxRules", 100);
+
         injectionRule = AlertRule.builder()
                 .id(UUID.randomUUID().toString())
                 .name("High Injection Rate")

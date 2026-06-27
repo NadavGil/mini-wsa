@@ -102,6 +102,6 @@ class StatsSummaryIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.limit", is(2)))
                 .andExpect(jsonPath("$.offset", is(0)))
-                .andExpect(jsonPath("$.samples", hasSize(lessThanOrEqualTo(2))));
+                .andExpect(jsonPath("$.events", hasSize(lessThanOrEqualTo(2))));
     }
 }
