@@ -13,7 +13,7 @@ class InMemoryRepeatOffenderCacheTest {
 
     @BeforeEach
     void setUp() {
-        cache = new InMemoryRepeatOffenderCache();
+        cache = new InMemoryRepeatOffenderCache(10, 5, 10000);
     }
 
     @Test
