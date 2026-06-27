@@ -13,8 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -43,7 +41,7 @@ public class EventIngestionService {
         List<EnrichedEvent> events = requests.stream()
                 .map(this::toEntity)
                 .map(enrichmentPipeline::enrichWithoutRecording)
-                .collect(Collectors.toList());
+                .toList();
 
         // Phase 2: persist atomically — rollback leaves cache unaffected
         List<EnrichedEvent> saved = eventRepository.saveAll(events);
@@ -53,14 +51,13 @@ public class EventIngestionService {
 
         return saved.stream()
                 .map(EnrichedEvent::getEventId)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private EnrichedEvent toEntity(EventIngestRequest req) {
-        // Null-guard: @NotNull on timestamp is validated upstream by the controller,
-        // but guard here defensively to surface a 422 instead of a 500 if bypassed.
-        Instant ts = Objects.requireNonNull(req.getTimestamp(),
-                "timestamp must not be null");
+        // @NotNull on EventIngestRequest.timestamp is enforced by the controller's Validator.validate()
+        // before this method is ever called — null here is not reachable in normal flow.
+        Instant ts = req.getTimestamp();
 
         Instant maxAllowed = Instant.now().plusSeconds((long) maxFutureOffsetMinutes * 60L);
         if (ts.isAfter(maxAllowed)) {

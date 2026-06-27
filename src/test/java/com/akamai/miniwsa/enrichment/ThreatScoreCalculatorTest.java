@@ -44,7 +44,7 @@ class ThreatScoreCalculatorTest {
     }
 
     @Test
-    void criticalDenyLoginRepeat_shouldEqual100() {
+    void criticalDenyLoginRepeat_shouldEqual90() {
         EnrichedEvent event = buildEvent(Severity.CRITICAL, ActionType.DENY, "/login", true);
         int score = calculator.calculate(event);
         // CRITICAL=40, DENY=20, /login=15, repeat=15 → 90

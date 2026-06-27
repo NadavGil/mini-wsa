@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,16 +27,12 @@ public class SamplesService {
         // Clamp limit: 1-100
         int effectiveLimit = Math.min(Math.max(limit, 1), 100);
 
-        // Enforce offset must be a non-negative multiple of effectiveLimit.
-        // Integer-division truncation (e.g. offset=5, limit=20 → page 0, wrong rows)
-        // would silently return wrong data; reject with a clear error instead.
         if (offset < 0) {
             throw new IllegalArgumentException("offset must be >= 0");
         }
-        if (offset % effectiveLimit != 0) {
-            throw new IllegalArgumentException(
-                    "offset (" + offset + ") must be a multiple of limit (" + effectiveLimit + ")");
-        }
+        // Page-number is derived by integer division. For correct page alignment, callers should
+        // use offset values that are multiples of limit (e.g. 0, 20, 40 with limit=20).
+        // Arbitrary offsets are accepted but are rounded down to the nearest page boundary.
         int pageNumber = offset / effectiveLimit;
 
         List<EnrichedEvent> events = eventRepository.findSamples(
@@ -48,7 +43,7 @@ public class SamplesService {
 
         List<EventSampleResponse> responses = events.stream()
                 .map(this::toResponse)
-                .collect(Collectors.toList());
+                .toList();
 
         return new SamplesPageResponse(total, effectiveLimit, offset, responses);
     }

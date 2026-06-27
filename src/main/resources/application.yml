@@ -17,8 +17,8 @@ spring:
 server:
   port: 8080
   tomcat:
-    max-http-form-post-size: 4194304   # 4 MB — covers JSON batch bodies
-    max-swallow-size: 4194304          # prevents Tomcat from buffering oversized requests
+    max-http-form-post-size: 4194304   # applies to form-encoded bodies only (not JSON)
+    max-swallow-size: 4194304          # limits JSON request body buffering in Tomcat
   error:
     include-stacktrace: never
     include-message: never
