@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini WSA — Sprint N+1 Bug Backlog</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.6; color: #1a1a1a; background: #f7f7f5; }
+
+  .page { max-width: 960px; margin: 0 auto; padding: 40px 32px 80px; }
+
+  /* ── header ── */
+  .header { margin-bottom: 40px; }
+  .header h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.3px; margin-bottom: 4px; }
+  .header .sub { font-size: 14px; color: #666; }
+  .status-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+  .pill-submitted { background: #e8f4fd; color: #1565c0; }
+  .pill-sprint    { background: #fff3e0; color: #e65100; }
+  .pill-count     { background: #f3e5f5; color: #6a1b9a; }
+
+  /* ── summary box ── */
+  .summary { background: #fff; border: 1px solid #e5e5e2; border-radius: 10px; padding: 20px 24px; margin-bottom: 36px; }
+  .summary p { color: #444; font-size: 13.5px; line-height: 1.7; }
+
+  /* ── section ── */
+  .section { margin-bottom: 44px; }
+  .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .section-header h2 { font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; }
+  .sev-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot-critical { background: #d32f2f; }
+  .dot-major    { background: #f57c00; }
+  .dot-minor    { background: #1976d2; }
+  .label-critical { color: #d32f2f; }
+  .label-major    { color: #f57c00; }
+  .label-minor    { color: #1976d2; }
+
+  /* ── bug card ── */
+  .bug-card { background: #fff; border: 1px solid #e5e5e2; border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+  .bug-card-header { display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px 14px; }
+  .bug-id { font-size: 12px; font-weight: 600; font-family: "SF Mono", "Fira Code", monospace; padding: 3px 8px; border-radius: 5px; white-space: nowrap; margin-top: 1px; }
+  .id-critical { background: #fde8e8; color: #b71c1c; }
+  .id-major    { background: #fff3e0; color: #bf360c; }
+  .id-minor    { background: #e3f2fd; color: #0d47a1; }
+  .bug-title-block { flex: 1; }
+  .bug-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .bug-oneliner { font-size: 13px; color: #666; }
+  .bug-body { padding: 0 20px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .bug-body.single { grid-template-columns: 1fr; }
+  .detail-block { }
+  .detail-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #999; margin-bottom: 6px; }
+  .detail-text { font-size: 13px; color: #333; line-height: 1.6; }
+  .code-snippet { background: #f5f5f3; border: 1px solid #e5e5e2; border-radius: 6px; padding: 10px 14px; font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; color: #d32f2f; line-height: 1.7; margin-top: 6px; white-space: pre; overflow-x: auto; }
+  .fix-text { font-size: 13px; color: #2e7d32; line-height: 1.6; }
+  .files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .file-tag { font-family: "SF Mono", "Fira Code", monospace; font-size: 11px; background: #f0f0ec; border: 1px solid #ddd; border-radius: 4px; padding: 2px 7px; color: #444; }
+  .divider { height: 1px; background: #f0f0ec; margin: 0 20px; }
+
+  /* ── sprint plan ── */
+  .sprint-box { background: #fff; border: 1px solid #e5e5e2; border-radius: 10px; padding: 24px 28px; }
+  .sprint-box h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .sprint-row { display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f5f5f3; }
+  .sprint-row:last-child { border-bottom: none; }
+  .sprint-week { font-size: 12px; font-weight: 600; color: #888; min-width: 60px; }
+  .sprint-ids { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sprint-desc { font-size: 13px; color: #444; flex: 1; }
+  .sprint-badge { font-size: 11px; font-weight: 600; font-family: monospace; padding: 2px 6px; border-radius: 4px; }
+  .sb-c { background: #fde8e8; color: #b71c1c; }
+  .sb-m { background: #fff3e0; color: #bf360c; }
+  .sb-n { background: #e3f2fd; color: #0d47a1; }
+
+  /* ── footer ── */
+  .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #e5e5e2; font-size: 12px; color: #aaa; text-align: center; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── HEADER ── -->
+  <div class="header">
+    <h1>Mini WSA — Known Bug Backlog</h1>
+    <div class="sub">Mini Web Security Analytics Pipeline · Code Review Findings</div>
+    <div class="status-bar">
+      <span class="pill pill-submitted">✓ Assignment submitted</span>
+      <span class="pill pill-sprint">Fixes → Sprint N+1</span>
+      <span class="pill pill-count">15 findings · 2 critical · 7 major · 6 minor</span>
+    </div>
+  </div>
+
+  <!-- ── SUMMARY ── -->
+  <div class="summary">
+    <p>The assignment has been submitted. During internal code review we identified 15 issues across severity levels. None of the bugs affect correctness of the core ingestion and alerting flows under normal single-instance, low-concurrency operation — but several would cause data integrity or reliability problems under production load. All 15 are scoped to the next sprint with fixes already prototyped.</p>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       CRITICAL
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="sev-dot dot-critical"></div>
+      <h2 class="label-critical">Critical</h2>
+    </div>
+
+    <!-- C1 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-critical">C1</span>
+        <div class="bug-title-block">
+          <div class="bug-title">Cache-after-commit race — RepeatOffenderCache poisoned on DB rollback</div>
+          <div class="bug-oneliner">Cache updated during the transaction; a rollback leaves stale counts with no corresponding persisted event.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body">
+        <div class="detail-block">
+          <div class="detail-label">Root cause</div>
+          <div class="code-snippet">// enrichmentPipeline.recordInCache() is called
+// inside the same transaction that writes to the DB.
+// If saveAll() later throws, the transaction rolls
+// back but the cache has already been mutated.
+saved.forEach(enrichmentPipeline::recordInCache);
+eventRepository.saveAll(events);  // ← rollback here
+                                  //   cache now poisoned</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Planned fix</div>
+          <div class="fix-text">Split enrichment into two phases: <code>enrichWithoutRecording()</code> before commit, then register a <code>TransactionSynchronizationManager.afterCommit()</code> callback that calls <code>recordInCache()</code> only after the DB write is durable. Cache is never touched if the transaction rolls back.</div>
+          <div class="files">
+            <span class="file-tag">EnrichmentPipeline.java</span>
+            <span class="file-tag">EventIngestionService.java</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- C2 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-critical">C2</span>
+        <div class="bug-title-block">
+          <div class="bug-title">Synchronous ingestion — Tomcat thread held for full DB write duration</div>
+          <div class="bug-oneliner">POST /v1/events/ingest blocks until persistence completes and returns 201 instead of 202 Accepted. Under burst load, Tomcat threads saturate and the service stops accepting requests.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body">
+        <div class="detail-block">
+          <div class="detail-label">Root cause</div>
+          <div class="code-snippet">// EventController.ingest()
+List&lt;String&gt; ids = ingestionService.ingest(requests);
+return ResponseEntity.status(HttpStatus.CREATED)  // 201
+        .body(Map.of("accepted", ids.size(), ...));
+// → blocks Tomcat thread for entire enrichment + DB write</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Planned fix</div>
+          <div class="fix-text">Add a <code>ThreadPoolTaskExecutor</code> (core 4, max 16, queue 1 000) with <code>CallerRunsPolicy</code> for backpressure. Annotate the internal persistence method with <code>@Async("ingestionExecutor")</code>. Controller returns <code>202 Accepted</code> immediately. Timestamp validation stays synchronous so callers still get <code>422</code> immediately for bad timestamps.</div>
+          <div class="files">
+            <span class="file-tag">AsyncIngestionConfig.java</span>
+            <span class="file-tag">EventController.java</span>
+            <span class="file-tag">EventIngestionService.java</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       MAJOR
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="sev-dot dot-major"></div>
+      <h2 class="label-major">Major</h2>
+    </div>
+
+    <!-- M1 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-major">M1</span>
+        <div class="bug-title-block">
+          <div class="bug-title">Pagination returns wrong window for non-aligned offsets</div>
+          <div class="bug-oneliner">Integer division maps any non-multiple-of-limit offset to the wrong page. offset=25, limit=20 → pageNumber=1 → rows 20–39 returned instead of 25–44.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body">
+        <div class="detail-block">
+          <div class="detail-label">Root cause</div>
+          <div class="code-snippet">// SamplesService.java
+int pageNumber = offset / effectiveLimit;  // integer division
+PageRequest.of(pageNumber, effectiveLimit, ...)
+// offset=25, limit=20 → 25/20 = 1 (truncated)
+// returns rows 20–39, not 25–44</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Planned fix</div>
+          <div class="fix-text">Replace offset semantics with 0-indexed page-number semantics throughout: <code>?page=0</code> returns the first <code>limit</code> rows, <code>?page=1</code> the next block, etc. <code>PageRequest.of(page, limit)</code> is passed directly — no division. <code>SamplesPageResponse</code> field renamed from <code>offset</code> to <code>page</code>.</div>
+          <div class="files">
+            <span class="file-tag">SamplesService.java</span>
+            <span class="file-tag">EventController.java</span>
+            <span class="file-tag">SamplesPageResponse.java</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- M2 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-major">M2</span>
+        <div class="bug-title-block">
+          <div class="bug-title">Repeat-offender cache is in-memory only — breaks in multi-instance deployment</div>
+          <div class="bug-oneliner">Each instance maintains its own ConcurrentHashMap window. An attacker sending requests across multiple instances is never flagged as a repeat offender.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body">
+        <div class="detail-block">
+          <div class="detail-label">Root cause</div>
+          <div class="code-snippet">// InMemoryRepeatOffenderCache.java
+private final ConcurrentHashMap&lt;String, Deque&lt;Instant&gt;&gt; window
+    = new ConcurrentHashMap&lt;&gt;();
+// Per-JVM — invisible to other instances</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Planned fix</div>
+          <div class="fix-text">Implement <code>RedisRepeatOffenderCache</code> using Redis sorted sets: <code>ZADD ip timestamp</code>, <code>ZREMRANGEBYSCORE</code> to expire old entries, <code>ZCOUNT</code> for the threshold check. Select implementation via <code>@ConditionalOnProperty(wsa.cache.redis.enabled)</code>. <code>InMemoryRepeatOffenderCache</code> remains the default for dev/test.</div>
+          <div class="files">
+            <span class="file-tag">RedisRepeatOffenderCache.java</span>
+            <span class="file-tag">CacheConfig.java</span>
+            <span class="file-tag">docker-compose.yml</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- M3 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-major">M3</span>
+        <div class="bug-title-block">
+          <div class="bug-title">N+1 queries in alert evaluation — one DB round-trip per rule</div>
+          <div class="bug-oneliner">AlertService.evaluateAll() fires one countByRuleCategoryAndTimestampOnOrAfter query for each alert rule. With 100 rules that is 100 sequential DB queries per evaluation call.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body">
+        <div class="detail-block">
+          <div class="detail-label">Root cause</div>
+          <div class="code-snippet">// AlertService.evaluateAll()
+return alertRepository.findAll().stream()
+    .map(rule -> evaluate(rule, now))  // ← 1 query per rule
+    .toList();
+
+private ... evaluate(AlertRule rule, ...) {
+    long observed = eventRepository
+        .countByRuleCategoryAndTimestampOnOrAfter(
+            rule.getCategory(), windowStart);  // ← N queries
+}</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Planned fix</div>
+          <div class="fix-text">Group rules by <code>windowMinutes</code>. For each distinct window, fire one <code>GROUP BY rule.category</code> query that returns counts for all categories in that window. Then resolve each rule against the pre-fetched map — O(1) lookup, constant number of queries regardless of rule count.</div>
+          <div class="files">
+            <span class="file-tag">AlertService.java</span>
+            <span class="file-tag">EventRepository.java</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- M4 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-major">M4</span>
+        <div class="bug-title-block">
+          <div class="bug-title">TOCTOU race in AlertService.define() — max-rules limit can be exceeded</div>
+          <div class="bug-oneliner">count() and save() are two separate operations with no lock between them. Concurrent requests can both read count &lt; maxRules and both proceed to save, breaching the limit.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body">
+        <div class="detail-block">
+          <div class="detail-label">Root cause</div>
+          <div class="code-snippet">// AlertService.define() — no synchronization
+long existing = alertRepository.count();   // read
+if (existing >= maxRules) throw ...;       // check
+AlertRule saved = alertRepository.save();  // write
+// Two threads can both pass the check before either saves</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Planned fix</div>
+          <div class="fix-text">Add <code>synchronized</code> to <code>define()</code>. The method is called infrequently (alert rule creation is an admin action, not a hot path), so the synchronization overhead is negligible and prevents any concurrent overshoot of the limit.</div>
+          <div class="files">
+            <span class="file-tag">AlertService.java</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- M5 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-major">M5</span>
+        <div class="bug-title-block">
+          <div class="bug-title">Dead code in EventRepository — unused query methods</div>
+          <div class="bug-oneliner">Several derived query methods are declared in EventRepository but never called by any service. They add noise, generate SQL at startup, and mislead reviewers about what queries the system actually uses.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body single">
+        <div class="detail-block">
+          <div class="detail-label">Planned fix</div>
+          <div class="fix-text">Audit all repository methods against service call sites. Remove any method not directly invoked by a service or test. The Stats and Samples queries that are actively used are retained; unused derived finders are deleted.</div>
+          <div class="files">
+            <span class="file-tag">EventRepository.java</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- M6 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-major">M6</span>
+        <div class="bug-title-block">
+          <div class="bug-title">Rate-limit config property ignored — hardcoded value used instead</div>
+          <div class="bug-oneliner">application.yml declares wsa.rate-limit.requests-per-minute but RateLimitConfig.java ignores it and hardcodes 200 req/min. Changing the property has no effect.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body">
+        <div class="detail-block">
+          <div class="detail-label">Root cause</div>
+          <div class="code-snippet">// RateLimitConfig.java
+Bandwidth limit = Bandwidth.classic(
+    200,                           // ← hardcoded, ignores property
+    Refill.greedy(200, Duration.ofMinutes(1)));
+// wsa.rate-limit.requests-per-minute in application.yml
+// is declared but never @Value-injected here</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Planned fix</div>
+          <div class="fix-text">Inject the property via <code>@Value("${wsa.rate-limit.requests-per-minute:200}")</code> and use it in the <code>Bandwidth.classic()</code> call. This makes the limiter configurable per environment without code changes.</div>
+          <div class="files">
+            <span class="file-tag">RateLimitConfig.java</span>
+            <span class="file-tag">application.yml</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- M7 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-major">M7</span>
+        <div class="bug-title-block">
+          <div class="bug-title">No observability — missing correlation IDs and Micrometer metrics</div>
+          <div class="bug-oneliner">Log lines have no request identifier — impossible to trace a single request across multiple log entries. No counters for accepted/rejected events, so there is no signal for ingestion error rates.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body">
+        <div class="detail-block">
+          <div class="detail-label">Root cause</div>
+          <div class="detail-text">No <code>RequestIdFilter</code> exists. No <code>MeterRegistry</code> is injected in any service. <code>spring-boot-starter-actuator</code> and <code>micrometer-core</code> are not in <code>pom.xml</code>.</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Planned fix</div>
+          <div class="fix-text">Add <code>RequestIdFilter</code> (<code>@Order(MIN_VALUE)</code>): reads incoming <code>X-Request-Id</code> header or generates a UUID, stores it in MDC so all log lines in the request carry <code>requestId=...</code> automatically, echoes it in the response. Inject <code>MeterRegistry</code> into <code>EventIngestionService</code> to increment <code>wsa.events.accepted</code> / <code>wsa.events.rejected</code> counters. Expose via <code>/actuator/metrics</code>.</div>
+          <div class="files">
+            <span class="file-tag">RequestIdFilter.java</span>
+            <span class="file-tag">EventIngestionService.java</span>
+            <span class="file-tag">pom.xml</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       MINOR
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="sev-dot dot-minor"></div>
+      <h2 class="label-minor">Minor</h2>
+    </div>
+
+    <!-- m1 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-minor">m1</span>
+        <div class="bug-title-block">
+          <div class="bug-title">Missing @NotBlank on ruleName — blank rule names accepted</div>
+          <div class="bug-oneliner">RuleInfoDto.ruleName has no @NotBlank constraint. A blank string passes validation and is persisted, producing events with no meaningful rule name.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body single">
+        <div class="detail-label">Planned fix</div>
+        <div class="fix-text">Add <code>@NotBlank</code> to <code>RuleInfoDto.ruleName</code>. The existing constraint violation handler already maps this to a <code>400 Bad Request</code>.</div>
+        <div class="files"><span class="file-tag">RuleInfoDto.java</span></div>
+      </div>
+    </div>
+
+    <!-- m2 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-minor">m2</span>
+        <div class="bug-title-block">
+          <div class="bug-title">clientIp not validated against IP format — any string accepted</div>
+          <div class="bug-oneliner">EventIngestRequest.clientIp accepts arbitrary strings. Garbage IP values are persisted and pollute attacker-frequency statistics.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body single">
+        <div class="detail-label">Planned fix</div>
+        <div class="fix-text">Add <code>@Pattern(regexp = "^[\\d.:a-fA-F]+$")</code> and <code>@Size(max = 45)</code> to <code>clientIp</code> in <code>EventIngestRequest</code>. The regex covers both IPv4 (<code>1.2.3.4</code>) and IPv6 (<code>2001:db8::1</code>) without a full parser dependency.</div>
+        <div class="files"><span class="file-tag">EventIngestRequest.java</span></div>
+      </div>
+    </div>
+
+    <!-- m3 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-minor">m3</span>
+        <div class="bug-title-block">
+          <div class="bug-title">InMemoryRepeatOffenderCache is unbounded — memory leak on long runs</div>
+          <div class="bug-oneliner">The ConcurrentHashMap grows without a size cap. Every unique clientIp ever seen is retained for the lifetime of the JVM process. Under attack traffic with many source IPs this can exhaust heap.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body single">
+        <div class="detail-label">Planned fix</div>
+        <div class="fix-text">Add a max-entries guard (configurable via <code>wsa.cache.max-ip-entries</code>, default 10 000). When the map exceeds the limit, evict the oldest entry by insertion order using a <code>LinkedHashMap</code> with <code>removeEldestEntry</code> override. This is a dev-mode cache so simplicity matters over precision.</div>
+        <div class="files"><span class="file-tag">InMemoryRepeatOffenderCache.java</span></div>
+      </div>
+    </div>
+
+    <!-- m4 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-minor">m4</span>
+        <div class="bug-title-block">
+          <div class="bug-title">No OpenAPI annotations on controllers — Swagger UI shows bare stubs</div>
+          <div class="bug-oneliner">Controllers have no @Operation, @Parameter, or @ApiResponse annotations. The auto-generated Swagger UI at /swagger has no descriptions, parameter docs, or example payloads.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body single">
+        <div class="detail-label">Planned fix</div>
+        <div class="fix-text">Annotate all controller methods with <code>@Operation(summary = ...)</code> and <code>@Parameter(description = ...)</code> for each query param. Add <code>@ApiResponse</code> entries for the non-200 status codes (400, 422, 429).</div>
+        <div class="files"><span class="file-tag">EventController.java</span><span class="file-tag">StatsController.java</span><span class="file-tag">AlertController.java</span></div>
+      </div>
+    </div>
+
+    <!-- m5 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-minor">m5</span>
+        <div class="bug-title-block">
+          <div class="bug-title">Schema owned by Hibernate ddl-auto:update in production profile</div>
+          <div class="bug-oneliner">application-postgres.yml uses ddl-auto: update. Hibernate auto-updates the schema on startup — no audit trail, no rollback path, and a known source of silent data loss on column renames.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body single">
+        <div class="detail-label">Planned fix</div>
+        <div class="fix-text">Add Flyway (<code>flyway-core</code> — Spring Boot 3.2 ships Flyway 9.x where PostgreSQL support is built in). Create <code>V1__initial_schema.sql</code> from the current schema. Switch Hibernate to <code>ddl-auto: validate</code> so it verifies the schema matches entities but never modifies it. H2 dev profile keeps <code>create-drop</code> with Flyway disabled.</div>
+        <div class="files"><span class="file-tag">pom.xml</span><span class="file-tag">V1__initial_schema.sql</span><span class="file-tag">application-postgres.yml</span></div>
+      </div>
+    </div>
+
+    <!-- m6 -->
+    <div class="bug-card">
+      <div class="bug-card-header">
+        <span class="bug-id id-minor">m6</span>
+        <div class="bug-title-block">
+          <div class="bug-title">Missing integration test coverage for pagination and async ingestion paths</div>
+          <div class="bug-oneliner">StatsSummaryIntegrationTest covers the happy path but there are no tests for page > 0 pagination, the 422 future-timestamp path, or the async completion guarantee.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="bug-body single">
+        <div class="detail-label">Planned fix</div>
+        <div class="fix-text">Extend <code>StatsSummaryIntegrationTest</code> with: page boundary assertions (page=0 vs page=1 return different events); future-timestamp 422 test; and an async ingestion test using a <code>SyncTaskExecutor</code> in a <code>@TestConfiguration</code> to make async calls behave synchronously for assertion purposes.</div>
+        <div class="files"><span class="file-tag">StatsSummaryIntegrationTest.java</span><span class="file-tag">TestAsyncConfig.java</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SPRINT PLAN
+  ══════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <h2 style="color:#333">Sprint N+1 Fix Plan</h2>
+    </div>
+    <div class="sprint-box">
+      <div class="sprint-row">
+        <span class="sprint-week">Week 1</span>
+        <div class="sprint-ids">
+          <span class="sprint-badge sb-c">C1</span>
+          <span class="sprint-badge sb-c">C2</span>
+        </div>
+        <span class="sprint-desc">Critical fixes — cache-after-commit race and async ingestion. These carry data-integrity risk and must ship first.</span>
+      </div>
+      <div class="sprint-row">
+        <span class="sprint-week">Week 1</span>
+        <div class="sprint-ids">
+          <span class="sprint-badge sb-m">M1</span>
+          <span class="sprint-badge sb-m">M3</span>
+          <span class="sprint-badge sb-m">M4</span>
+        </div>
+        <span class="sprint-desc">Pagination fix, N+1 alert queries, and AlertService TOCTOU — all correctness issues with straightforward fixes already prototyped.</span>
+      </div>
+      <div class="sprint-row">
+        <span class="sprint-week">Week 2</span>
+        <div class="sprint-ids">
+          <span class="sprint-badge sb-m">M2</span>
+          <span class="sprint-badge sb-m">M7</span>
+        </div>
+        <span class="sprint-desc">Redis cache + observability (RequestIdFilter, Micrometer counters). Requires Docker Compose update for Redis; observability fix already prototyped.</span>
+      </div>
+      <div class="sprint-row">
+        <span class="sprint-week">Week 2</span>
+        <div class="sprint-ids">
+          <span class="sprint-badge sb-m">M5</span>
+          <span class="sprint-badge sb-m">M6</span>
+          <span class="sprint-badge sb-n">m1–m6</span>
+        </div>
+        <span class="sprint-desc">Dead-code removal, rate-limit config wiring, and all 6 minor items (validation, bounded cache, OpenAPI annotations, Flyway, test coverage).</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Mini WSA · Bug Backlog · Generated for Sprint N+1 planning</div>
+</div>
+</body>
+</html>
