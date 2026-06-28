@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -44,25 +43,25 @@ public class StatsService {
                 .aggregateByCategory(configId, effectiveFrom, effectiveTo)
                 .stream()
                 .map(a -> new CategoryStat(a.getCategory(), a.getCount(), a.getAvgThreatScore()))
-                .collect(Collectors.toList());
+                .toList();
 
         List<ActionStat> byAction = eventRepository
                 .aggregateByAction(configId, effectiveFrom, effectiveTo)
                 .stream()
                 .map(a -> new ActionStat(a.getAction(), a.getCount()))
-                .collect(Collectors.toList());
+                .toList();
 
         List<AttackerStat> topAttackers = eventRepository
                 .topAttackers(configId, effectiveFrom, effectiveTo, PageRequest.of(0, 10))
                 .stream()
                 .map(a -> new AttackerStat(a.getClientIp(), a.getCount(), a.getAvgThreatScore()))
-                .collect(Collectors.toList());
+                .toList();
 
         List<PathStat> topPaths = eventRepository
                 .topPaths(configId, effectiveFrom, effectiveTo, PageRequest.of(0, 10))
                 .stream()
                 .map(a -> new PathStat(a.getPath(), a.getCount()))
-                .collect(Collectors.toList());
+                .toList();
 
         return new StatsSummaryResponse(configId, total, byCategory, byAction, topAttackers, topPaths);
     }

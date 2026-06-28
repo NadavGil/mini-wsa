@@ -1,6 +1,7 @@
 package com.akamai.miniwsa.dto.alerts;
 
 import com.akamai.miniwsa.domain.AttackCategory;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -23,9 +24,11 @@ public class AlertRuleRequest {
 
     @NotNull
     @Min(1)
+    @Max(100_000)   // prevents absurdly large thresholds
     private Integer threshold;
 
     @NotNull
     @Min(1)
+    @Max(1440)      // max 24 hours — prevents full-table-scan via 4000-year window
     private Integer windowMinutes;
 }

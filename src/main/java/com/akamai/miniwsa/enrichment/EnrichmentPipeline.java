@@ -4,6 +4,19 @@ import com.akamai.miniwsa.domain.EnrichedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * Two-phase enrichment pipeline:
+ *
+ * <ol>
+ *   <li>{@link #enrichWithoutRecording} — pure computation, no cache side-effects.
+ *       Safe to call before the DB write; a rollback leaves the cache unaffected.</li>
+ *   <li>{@link #recordInCache} — writes the event into the repeat-offender cache.
+ *       Must be called ONLY after the DB write has committed successfully.</li>
+ * </ol>
+ *
+ * Splitting these two phases prevents cache poisoning when a batch DB write fails
+ * and rolls back: the cache is never updated for events that were not persisted.
+ */
 @Component
 @RequiredArgsConstructor
 public class EnrichmentPipeline {
@@ -13,22 +26,14 @@ public class EnrichmentPipeline {
     private final RepeatOffenderCache repeatOffenderCache;
 
     /**
-     * Enriches the given event in-place and returns it.
-     * <ol>
-     *   <li>Check repeat-offender status BEFORE recording the current event (so the
-     *       current event is not counted toward its own repeat-offender window).</li>
-     *   <li>Record the event in the cache.</li>
-     *   <li>Set repeatOffender, attackType, and threatScore fields.</li>
-     * </ol>
+     * Computes and sets enriched fields on the event. No cache writes.
+     * Check-before-record: isRepeatOffender() reads the cache but does not modify it,
+     * so the current event is NOT counted toward its own repeat-offender window.
      */
-    public EnrichedEvent enrich(EnrichedEvent event) {
-        // 1. Check before recording
-        boolean repeat = repeatOffenderCache.isRepeatOffender(event.getClientIp(), event.getTimestamp());
+    public EnrichedEvent enrichWithoutRecording(EnrichedEvent event) {
+        boolean repeat = repeatOffenderCache.isRepeatOffender(
+                event.getClientIp(), event.getTimestamp());
 
-        // 2. Record into cache
-        repeatOffenderCache.record(event.getClientIp(), event.getTimestamp());
-
-        // 3. Set enriched fields
         event.setRepeatOffender(repeat);
 
         if (event.getRule() != null) {
@@ -44,5 +49,13 @@ public class EnrichmentPipeline {
         }
 
         return event;
+    }
+
+    /**
+     * Records the event timestamp in the repeat-offender cache.
+     * Call this AFTER a successful DB commit — never before.
+     */
+    public void recordInCache(EnrichedEvent event) {
+        repeatOffenderCache.record(event.getClientIp(), event.getTimestamp());
     }
 }

@@ -9,9 +9,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.concurrent.Executor;
 
 import java.time.Instant;
 import java.util.Map;
@@ -26,6 +31,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("h2")
 class StatsSummaryIntegrationTest {
+
+    /** Run ingestion synchronously in tests so seeded events are in DB before stat assertions. */
+    @TestConfiguration
+    static class SyncAsyncConfig {
+        @Bean(name = "ingestionExecutor")
+        public Executor ingestionExecutor() {
+            return new SyncTaskExecutor();
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -49,6 +63,7 @@ class StatsSummaryIntegrationTest {
                     "statusCode", 403,
                     "rule", Map.of(
                             "ruleId", "R00" + i,
+                            "ruleName", "Injection Rule " + i,
                             "severity", Severity.HIGH.name(),
                             "category", AttackCategory.INJECTION.name()
                     ),
@@ -98,10 +113,10 @@ class StatsSummaryIntegrationTest {
         mockMvc.perform(get("/v1/events/samples")
                         .param("configId", String.valueOf(CONFIG_ID))
                         .param("limit", "2")
-                        .param("offset", "0"))
+                        .param("page", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.limit", is(2)))
-                .andExpect(jsonPath("$.offset", is(0)))
-                .andExpect(jsonPath("$.samples", hasSize(lessThanOrEqualTo(2))));
+                .andExpect(jsonPath("$.page", is(0)))
+                .andExpect(jsonPath("$.events", hasSize(lessThanOrEqualTo(2))));
     }
 }

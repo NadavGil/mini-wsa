@@ -17,7 +17,8 @@ spring:
 server:
   port: 8080
   tomcat:
-    max-http-form-post-size: 1048576
+    max-http-form-post-size: 4194304   # applies to form-encoded bodies only (not JSON)
+    max-swallow-size: 4194304          # limits JSON request body buffering in Tomcat
   error:
     include-stacktrace: never
     include-message: never
@@ -27,10 +28,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info,metrics
   endpoint:
     health:
-      show-details: never
+      show-details: when-authorized   # DB pool, disk, ping — visible to ops, hidden from public
+    metrics:
+      enabled: true
 
 springdoc:
   swagger-ui:
@@ -42,14 +45,22 @@ wsa:
   ingestion:
     max-batch-size: 500
     max-future-offset-minutes: 5
+    async:
+      core-pool-size: 4
+      max-pool-size: 16
+      queue-capacity: 1000        # CallerRunsPolicy kicks in when full — backpressure, not drop
   cache:
     max-ip-entries: 10000
     window-minutes: 10
     repeat-offender-threshold: 5
+    redis:
+      enabled: false              # Set true + configure spring.data.redis.* for multi-instance deployments
   rate-limit:
-    ingest-per-minute: 1000
-    stats-per-minute: 100
-    samples-per-minute: 100
+    requests-per-minute: 200     # global per-IP cap applied uniformly by RateLimitConfig
+    # Per-endpoint limits (ingest vs stats vs samples) are a planned enhancement.
+    # RateLimitConfig currently applies one bucket per IP across all paths.
+    # To implement per-endpoint limits: create a separate Bucket4j bucket per
+    # (clientIp, path-prefix) pair keyed off the request URI.
   stats:
     max-range-days: 90
   alerts:

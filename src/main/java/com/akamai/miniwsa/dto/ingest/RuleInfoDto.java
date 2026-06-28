@@ -19,6 +19,7 @@ public class RuleInfoDto {
     @NotBlank
     private String ruleId;
 
+    @NotBlank
     private String ruleName;
 
     @Size(max = 1024)

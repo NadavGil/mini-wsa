@@ -7,6 +7,7 @@ import com.akamai.miniwsa.dto.alerts.AlertRuleRequest;
 import com.akamai.miniwsa.dto.alerts.AlertRuleResponse;
 import com.akamai.miniwsa.repository.AlertRepository;
 import com.akamai.miniwsa.repository.EventRepository;
+import com.akamai.miniwsa.repository.projection.CategoryCount;
 import com.akamai.miniwsa.service.AlertService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -40,6 +42,9 @@ class AlertEvaluationTest {
 
     @BeforeEach
     void setUp() {
+        // @Value fields are not injected by Mockito — set explicitly
+        ReflectionTestUtils.setField(alertService, "maxRules", 100);
+
         injectionRule = AlertRule.builder()
                 .id(UUID.randomUUID().toString())
                 .name("High Injection Rate")
@@ -50,12 +55,19 @@ class AlertEvaluationTest {
                 .build();
     }
 
+    /** Returns a mocked CategoryCount projection with the given category and count. */
+    private CategoryCount categoryCount(AttackCategory category, long count) {
+        CategoryCount mock = mock(CategoryCount.class);
+        when(mock.getCategory()).thenReturn(category);
+        when(mock.getCount()).thenReturn(count);
+        return mock;
+    }
+
     @Test
     void evaluateAll_firing_whenObservedExceedsThreshold() {
         when(alertRepository.findAll()).thenReturn(List.of(injectionRule));
-        when(eventRepository.countByRuleCategoryAndTimestampAfter(
-                eq(AttackCategory.INJECTION), any(Instant.class)))
-                .thenReturn(15L);
+        when(eventRepository.countByCategoriesFrom(anyList(), any(Instant.class)))
+                .thenReturn(List.of(categoryCount(AttackCategory.INJECTION, 15L)));
 
         List<AlertEvaluationResult> results = alertService.evaluateAll();
 
@@ -67,9 +79,8 @@ class AlertEvaluationTest {
     @Test
     void evaluateAll_notFiring_whenBelowThreshold() {
         when(alertRepository.findAll()).thenReturn(List.of(injectionRule));
-        when(eventRepository.countByRuleCategoryAndTimestampAfter(
-                eq(AttackCategory.INJECTION), any(Instant.class)))
-                .thenReturn(5L);
+        when(eventRepository.countByCategoriesFrom(anyList(), any(Instant.class)))
+                .thenReturn(List.of(categoryCount(AttackCategory.INJECTION, 5L)));
 
         List<AlertEvaluationResult> results = alertService.evaluateAll();
 
@@ -80,13 +91,25 @@ class AlertEvaluationTest {
     @Test
     void evaluateAll_atThreshold_shouldFire() {
         when(alertRepository.findAll()).thenReturn(List.of(injectionRule));
-        when(eventRepository.countByRuleCategoryAndTimestampAfter(
-                eq(AttackCategory.INJECTION), any(Instant.class)))
-                .thenReturn(10L);  // exactly at threshold
+        when(eventRepository.countByCategoriesFrom(anyList(), any(Instant.class)))
+                .thenReturn(List.of(categoryCount(AttackCategory.INJECTION, 10L)));
 
         List<AlertEvaluationResult> results = alertService.evaluateAll();
 
         assertThat(results.get(0).firing()).isTrue();
+    }
+
+    @Test
+    void evaluateAll_categoryNotInResults_countIsZero() {
+        // Category has no events in the window — DB returns empty list
+        when(alertRepository.findAll()).thenReturn(List.of(injectionRule));
+        when(eventRepository.countByCategoriesFrom(anyList(), any(Instant.class)))
+                .thenReturn(List.of());  // no rows for INJECTION
+
+        List<AlertEvaluationResult> results = alertService.evaluateAll();
+
+        assertThat(results.get(0).observedCount()).isEqualTo(0L);
+        assertThat(results.get(0).firing()).isFalse();
     }
 
     @Test

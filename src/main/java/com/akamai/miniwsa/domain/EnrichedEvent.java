@@ -7,12 +7,15 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.PostLoad;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.domain.Persistable;
 
 import java.time.Instant;
 
@@ -31,7 +34,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class EnrichedEvent {
+public class EnrichedEvent implements Persistable<String> {
 
     @Id
     @Column(name = "event_id")
@@ -89,6 +92,22 @@ public class EnrichedEvent {
     @Column(name = "repeat_offender", nullable = false)
     private boolean repeatOffender;
 
-    @Column(name = "ingested_at", nullable = false)
-    private Instant ingestedAt;
+    @Column(name = "received_at", nullable = false)
+    private Instant receivedAt;
+
+    // Persistable: forces JPA to always use persist() (INSERT), never merge() (UPDATE/no-op).
+    // Without this, Spring Data calls merge() for non-null String IDs, silently
+    // swallowing duplicate inserts instead of throwing DataIntegrityViolationException.
+    @Transient
+    @Builder.Default
+    private boolean isNew = true;
+
+    @Override
+    public String getId() { return eventId; }
+
+    @Override
+    public boolean isNew() { return isNew; }
+
+    @PostLoad
+    void markNotNew() { this.isNew = false; }
 }

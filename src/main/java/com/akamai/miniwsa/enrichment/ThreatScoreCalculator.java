@@ -1,6 +1,7 @@
 package com.akamai.miniwsa.enrichment;
 
 import com.akamai.miniwsa.domain.ActionType;
+import com.akamai.miniwsa.domain.EnrichedEvent;
 import com.akamai.miniwsa.domain.Severity;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,12 @@ public class ThreatScoreCalculator {
      * cap      : min(score, 100)  — max theoretical = 40+20+15+15 = 90
      * </pre>
      */
+    /** Convenience overload — extracts fields from the entity. */
+    public int calculate(EnrichedEvent event) {
+        Severity sev = (event.getRule() != null) ? event.getRule().getSeverity() : null;
+        return calculate(sev, event.getAction(), event.getPath(), event.isRepeatOffender());
+    }
+
     public int calculate(Severity severity, ActionType action, String path, boolean repeatOffender) {
         int score = 0;
 

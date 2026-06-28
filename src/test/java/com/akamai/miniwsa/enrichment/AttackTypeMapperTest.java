@@ -26,7 +26,7 @@ class AttackTypeMapperTest {
 
     @Test
     void injectionShouldMapToSqlInjection() {
-        assertThat(mapper.map(AttackCategory.INJECTION)).isEqualTo("SQL Injection");
+        assertThat(mapper.map(AttackCategory.INJECTION)).isEqualTo("SQL/Command Injection");
     }
 
     @Test

@@ -8,3 +8,8 @@ target/
 *.log
 .env
 application-secrets.properties
+board-fixes*.bundle
+mini-wsa*.bundle
+candidate-review*.md
+skeleton/
+SPRINT_PLAN.md

@@ -18,11 +18,24 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: mini-wsa-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   app:
     build: .
     container_name: mini-wsa-app
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: postgres
@@ -31,6 +44,10 @@ services:
       DB_NAME: miniwsa
       DB_USER: miniwsa
       DB_PASSWORD: miniwsa_secret
+      # Enable distributed repeat-offender cache (required for multi-instance deployments)
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      WSA_CACHE_REDIS_ENABLED: "true"
     ports:
       - "8080:8080"
     healthcheck:

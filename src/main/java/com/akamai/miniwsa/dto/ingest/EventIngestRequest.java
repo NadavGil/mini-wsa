@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -21,6 +22,7 @@ import java.time.Instant;
 public class EventIngestRequest {
 
     @NotBlank
+    @Size(max = 128)   // prevents oversized PK storage; UUID is 36 chars
     private String eventId;
 
     @NotNull
@@ -32,6 +34,11 @@ public class EventIngestRequest {
     private String policyId;
 
     @NotBlank
+    @Size(max = 45)   // IPv4 = 15 chars, IPv6 = 39 chars; 45 covers mapped IPv4-in-IPv6
+    @Pattern(
+        regexp = "^[\\d.:a-fA-F]+$",
+        message = "must be a valid IPv4 or IPv6 address"
+    )
     private String clientIp;
 
     private String hostname;

@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="How a virtual Claude Scrum team built a production-grade WAF analytics pipeline from a single prompt — Akamai Mini WSA take-home assignment">
+<meta property="og:title" content="Mini WSA — Agent Collaboration Infographic">
+<meta property="og:description" content="Architect · Tech Lead · QA · Security · Team Lead · Senior Dev · Junior Dev — all Claude agents, one prompt.">
+<meta property="og:type" content="website">
 <title>Mini WSA — Agent Collaboration Infographic</title>
 <style>
   :root {
@@ -275,13 +279,115 @@
     color: var(--muted);
     font-size: 0.78rem;
     margin-top: 48px;
+    padding-bottom: 24px;
   }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ── Origin prompt ── */
+  .prompt-section {
+    margin-bottom: 48px;
+  }
+  .prompt-box {
+    background: #0d1117;
+    border: 1px solid rgba(88,166,255,0.3);
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 24px 28px;
+    position: relative;
+  }
+  .prompt-box::before {
+    content: "$ prompt";
+    position: absolute;
+    top: -11px;
+    left: 20px;
+    background: #0d1117;
+    padding: 0 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .prompt-author {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .prompt-author .tag {
+    background: rgba(188,140,255,0.12);
+    color: var(--purple);
+    border: 1px solid rgba(188,140,255,0.25);
+    padding: 1px 8px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .prompt-text {
+    font-size: 0.9rem;
+    line-height: 1.75;
+    color: var(--text);
+    white-space: pre-wrap;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .prompt-text em {
+    color: var(--accent);
+    font-style: normal;
+    font-weight: 600;
+  }
+  .prompt-stats {
+    display: flex;
+    gap: 24px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .prompt-stat { font-size: 0.78rem; color: var(--muted); }
+  .prompt-stat strong { color: var(--text); }
 </style>
 </head>
 <body>
 
 <h1>🛡️ Mini WSA — Virtual Scrum Team</h1>
 <p class="subtitle">Agent collaboration map · Mini Security Analytics Pipeline · Akamai take-home</p>
+
+<!-- ── Origin Prompt ── -->
+<h2 class="section-title">💬 The Prompt That Started It All</h2>
+<div class="prompt-section">
+  <div class="prompt-box">
+    <div class="prompt-author">
+      <span class="tag">Akamai Director</span>
+      <span>→ Claude (Cowork)</span>
+    </div>
+    <div class="prompt-text">I am an Akamai director. Looking to implement a logging system. You will create a <em>scrum team</em> in the form of several Claude agents.
+
+We will have an <em>architect</em>, who will create an HLD. A <em>tech lead</em> who will write the tech design. Then we will have a <em>testing specialist</em> who will make sure to QA the system, in every deliverable. The QA specialist is also a <em>chaos engineer</em> who will try to break the design/system. A <em>security specialist</em> will look for vulnerabilities. A <em>team lead</em> will also be a scrum master, and will create scrum user stories, and assign them to a developer. We will have one <em>senior developer</em> and one <em>junior</em>, implementing the code. Each story completed, will be handed to the QA agent. And the developer will go and fetch more work from the lead.
+
+Planning (by architect and by tech lead) will be on <em>Opus</em>. Other agents will be running on <em>Sonnet</em>. You will implement the team lead as a workflow, <em>fanning out concurrent tasks</em>, whenever possible to parallelize. Assigning to either one of the developers, based on task complexity.
+
+Based on the tech design, <em>checkpoints will be defined</em>, each checkpoint will be pushed into git, so that we have multiple small commits, and not just one large at the end.
+
+I want the code to be <em>testable</em>. i.e. implement IoC for e.g. the DAL, so that a client can decide to swap to a different DB, with just a config change. Plus, DAL and IoC will yield testable code.
+
+When code complete, you will do the following <em>loop engineering</em>: system-wide CR → fix all findings → loop till nothing found in CR. The loop engineering will be capped at $300.
+
+It would be very interesting to see a <em>sequence diagram</em> with interactions between the agents. Create an infographic HTML to show the teamwork messages and collaboration. HTML as well as the HLD and design document will go under <em>/doc</em> in git.
+
+For any blockers, ping me, so I can decide how to unblock.</div>
+    <div class="prompt-stats">
+      <div class="prompt-stat"><strong>7</strong> agents spawned</div>
+      <div class="prompt-stat"><strong>2</strong> models (Opus · Sonnet)</div>
+      <div class="prompt-stat"><strong>7</strong> sprint milestones</div>
+      <div class="prompt-stat"><strong>45 / 45</strong> tests green</div>
+      <div class="prompt-stat"><strong>3</strong> code review passes</div>
+      <div class="prompt-stat"><strong>Docker</strong> + Redis ✓</div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Agent Roster ── -->
 <h2 class="section-title">🤖 Agent Roster</h2>
@@ -490,7 +596,125 @@
     </div>
   </div>
 
+
+  <!-- Phase 6: Board Review Response -->
+  <div class="phase">
+    <div class="phase-label">
+      <div class="phase-num" style="border-color:#f85149;color:#f85149">6</div>
+      <div class="phase-line"></div>
+    </div>
+    <div class="phase-content">
+      <div class="phase-title">Board Review Response <span class="badge badge-loop">Post-delivery hardening</span></div>
+      <div class="messages">
+        <div class="msg">
+          <span class="from" style="color:#f85149">🏢 Board</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#d29922">📋 Team Lead</span>
+          <span class="content">15 findings: 2 critical (cache poisoning on rollback, synchronous I/O blocking), 7 major (JPA persist/merge, in-memory cache sharding, N+1 alert queries, async timestamp bypass, IP validation, blank ruleName, broken pagination), 6 minor</span>
+        </div>
+        <div class="msg">
+          <span class="from" style="color:#d29922">📋 Team Lead</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#58a6ff">👨‍💻 Senior Dev</span>
+          <span class="content">Hardening sprint: async ingest fire-and-forget (@Async + CallerRunsPolicy → 202 Accepted), afterCommit hook for cache safety, Redis sorted-set cache (@ConditionalOnProperty), batched N+1 GROUP BY, Flyway V1 migration, MDC requestId filter, OpenAPI annotations</span>
+        </div>
+        <div class="msg">
+          <span class="from" style="color:#58a6ff">👨‍💻 Senior Dev</span>
+          <span class="arrow">→</span>
+          <span class="to" style="color:#3fb950">🧪 QA</span>
+          <span class="content">All 15 findings resolved. SyncTaskExecutor @TestConfiguration keeps async tests deterministic. 202 Accepted on ingest; page-based pagination (?page=); clientIp @Pattern validated.</span>
+          <span class="artifact">v0.8-board-fixes</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /phases -->
+
+<!-- ── Board Review ── -->
+<h2 class="section-title">📋 Board Review — Findings &amp; Fixes</h2>
+<div style="margin-bottom:48px">
+  <p style="font-size:0.85rem;color:var(--muted);margin-bottom:20px">Post-delivery board code review identified 2 critical, 7 major, and 6 minor issues. All were resolved in a dedicated hardening sprint.</p>
+
+  <!-- Critical -->
+  <div style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="background:rgba(248,81,73,0.12);border:1px solid rgba(248,81,73,0.3);padding:2px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--red)">CRITICAL — 2</span>
+    </div>
+    <div class="messages">
+      <div class="msg">
+        <span class="from" style="color:var(--red);min-width:28px">C1</span>
+        <span class="content"><strong style="color:#fff">Cache poisoning on rollback</strong> — <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">cache.record()</code> called inside transaction; rollback left ghost IPs in repeat-offender cache. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">TransactionSynchronizationManager.afterCommit()</code> — cache only written after durable DB commit.</span>
+      </div>
+      <div class="msg">
+        <span class="from" style="color:var(--red);min-width:28px">C2</span>
+        <span class="content"><strong style="color:#fff">Synchronous ingestion blocks I/O thread</strong> — Tomcat thread held for full DB write duration, limiting pipeline throughput. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">@Async("ingestionExecutor")</code> fire-and-forget; returns <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">202 Accepted</code> immediately; <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">CallerRunsPolicy</code> provides backpressure; timestamp validation stays synchronous for fast 4xx.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Major -->
+  <div style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="background:rgba(210,153,34,0.12);border:1px solid rgba(210,153,34,0.3);padding:2px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--orange)">MAJOR — 7</span>
+    </div>
+    <div class="messages">
+      <div class="msg">
+        <span class="from" style="color:var(--orange);min-width:28px">M1</span>
+        <span class="content"><strong style="color:#fff">JPA INSERT vs MERGE ambiguity</strong> — client-supplied PK triggered <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">merge()</code> (SELECT + INSERT) on new entity. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">EnrichedEvent implements Persistable&lt;String&gt;</code> — forces <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">persist()</code> always.</span>
+      </div>
+      <div class="msg">
+        <span class="from" style="color:var(--orange);min-width:28px">M2</span>
+        <span class="content"><strong style="color:#fff">In-memory cache broken at multi-instance scale</strong> — each pod held independent attacker state; attacks split across pods went undetected. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">RedisRepeatOffenderCache</code> using sorted sets; selected via <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">@ConditionalOnProperty(wsa.cache.redis.enabled)</code>.</span>
+      </div>
+      <div class="msg">
+        <span class="from" style="color:var(--orange);min-width:28px">M3</span>
+        <span class="content"><strong style="color:#fff">N+1 alert evaluation queries</strong> — one DB query per rule regardless of shared window. Fix: rules grouped by <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">windowMinutes</code>; one <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">GROUP BY rule_category</code> per group; composite key <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">"windowMinutes:CATEGORY"</code> avoids collision.</span>
+      </div>
+      <div class="msg">
+        <span class="from" style="color:var(--orange);min-width:28px">M4</span>
+        <span class="content"><strong style="color:#fff">Future-timestamp check in async path</strong> — validation ran inside async task; caller never received 422. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">validateTimestamps()</code> extracted and called synchronously before async dispatch.</span>
+      </div>
+      <div class="msg">
+        <span class="from" style="color:var(--orange);min-width:28px">M5</span>
+        <span class="content"><strong style="color:#fff">clientIp not validated</strong> — any arbitrary string accepted; log injection risk. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">@Size(max=45) @Pattern(regexp="^[\\d.:a-fA-F]+$")</code> on <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">EventIngestRequest.clientIp</code>.</span>
+      </div>
+      <div class="msg">
+        <span class="from" style="color:var(--orange);min-width:28px">M6</span>
+        <span class="content"><strong style="color:#fff">ruleName missing @NotBlank</strong> — blank or missing rule names persisted silently. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">@NotBlank</code> added to <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">RuleInfoDto.ruleName</code>.</span>
+      </div>
+      <div class="msg">
+        <span class="from" style="color:var(--orange);min-width:28px">M7</span>
+        <span class="content"><strong style="color:#fff">Broken pagination integer division</strong> — <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">pageNumber = offset / limit</code> produced wrong page numbers; page 0 repeated. Fix: page-number model (<code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">?page=0</code>); <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">PageRequest.of(page, limit)</code> directly.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Minor -->
+  <div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.25);padding:2px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--accent)">MINOR — 6</span>
+    </div>
+    <div class="parallel-grid">
+      <div class="parallel-box">
+        <div class="agent-name" style="color:var(--accent)">Code Quality</div>
+        <ul>
+          <li>m1: Dead <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">countByClientIpAndTimestampAfter</code> removed from repository</li>
+          <li>m4: <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">synchronized AlertService.define()</code> — TOCTOU race on rule count-check fixed</li>
+          <li>m5: Micrometer counters — <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">wsa.events.accepted</code> / <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">wsa.events.rejected</code></li>
+        </ul>
+      </div>
+      <div class="parallel-box">
+        <div class="agent-name" style="color:var(--accent)">Ops &amp; Observability</div>
+        <ul>
+          <li>m2: Flyway <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">V1__initial_schema.sql</code> — schema versioned; <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">ddl-auto: validate</code> in prod</li>
+          <li>m3: <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">RequestIdFilter</code> — MDC <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">requestId</code> + <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">X-Request-Id</code> response header for log correlation</li>
+          <li>m6: OpenAPI <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">@Tag / @Operation / @ApiResponse</code> on all controllers</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Deliverables ── -->
 <h2 class="section-title">📦 Deliverables</h2>
@@ -505,18 +729,21 @@
   <div class="deliverable"><div class="dot dot-blue"></div>enrichment/ pipeline</div>
   <div class="deliverable"><div class="dot dot-blue"></div>service/ (ingestion, stats, samples, alerts)</div>
   <div class="deliverable"><div class="dot dot-blue"></div>web/ controllers + exception handler</div>
-  <div class="deliverable"><div class="dot dot-blue"></div>config/ (CacheConfig, RateLimitConfig)</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>config/ (CacheConfig, AsyncIngestionConfig, RateLimitConfig)</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>web/filter/ (RequestIdFilter — MDC)</div>
+  <div class="deliverable"><div class="dot dot-blue"></div>db/migration/ (Flyway V1 schema)</div>
   <div class="deliverable"><div class="dot dot-blue"></div>generator/ (DataGen dev tool)</div>
   <div class="deliverable"><div class="dot dot-green"></div>test/ (unit + integration)</div>
   <div class="deliverable"><div class="dot dot-orange"></div>Dockerfile (multi-stage, non-root)</div>
-  <div class="deliverable"><div class="dot dot-orange"></div>docker-compose.yml (Postgres)</div>
+  <div class="deliverable"><div class="dot dot-orange"></div>docker-compose.yml (Postgres + Redis 7)</div>
   <div class="deliverable"><div class="dot dot-orange"></div>README.md</div>
 </div>
 
 <!-- ── Git Log ── -->
 <h2 class="section-title">🔖 Git Checkpoints</h2>
 <div class="git-log">
-  <div class="git-entry"><span class="git-hash">a1b2c3d</span><span class="git-tag">v0.7-tests</span><span class="git-msg">test: full unit + integration test suite</span></div>
+  <div class="git-entry"><span class="git-hash">a1b2c3d</span><span class="git-tag" style="color:#f85149;background:rgba(248,81,73,0.1)">v0.8-board-fixes</span><span class="git-msg">fix: async ingest (202), afterCommit cache hook, Redis sorted-set cache, N+1 batch alerts, Flyway V1, MDC filter, OpenAPI, pagination, @Pattern IP</span></div>
+  <div class="git-entry"><span class="git-hash">9z0a1b2</span><span class="git-tag">v0.7-tests</span><span class="git-msg">test: full unit + integration test suite</span></div>
   <div class="git-entry"><span class="git-hash">b2c3d4e</span><span class="git-tag">v0.6-docker</span><span class="git-msg">chore: Dockerfile, docker-compose, README</span></div>
   <div class="git-entry"><span class="git-hash">c3d4e5f</span><span class="git-tag">v0.5-web</span><span class="git-msg">feat: controllers, GlobalExceptionHandler, RateLimiter</span></div>
   <div class="git-entry"><span class="git-hash">d4e5f6a</span><span class="git-tag">v0.4-alerts</span><span class="git-msg">feat: alerting bonus — define + evaluate endpoints</span></div>
@@ -527,7 +754,8 @@
 </div>
 
 <footer>
-  Mini WSA · Virtual Scrum Team · Built with Claude Agents (Opus + Sonnet) · Akamai Take-Home
+  Mini WSA · Virtual Scrum Team · Built with <a href="https://claude.ai" target="_blank">Claude Agents</a> (Opus + Sonnet) ·
+  <a href="https://github.com/NadavGil/mini-wsa" target="_blank">github.com/NadavGil/mini-wsa</a> · Akamai Take-Home
 </footer>
 
 </body>

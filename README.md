@@ -55,9 +55,9 @@ Content-Type: application/json
 [{ ... }, { ... }]
 ```
 
-Response `201`:
+Response `202 Accepted` (async — event queued, not yet persisted):
 ```json
-{ "accepted": 1, "eventIds": ["uuid"] }
+{ "queued": 1, "eventIds": ["uuid"] }
 ```
 
 ### Stats Summary
@@ -69,7 +69,7 @@ GET /v1/stats/summary?configId=1001&from=2024-01-15T00:00:00Z&to=2024-01-16T00:0
 ### Event Samples
 
 ```http
-GET /v1/events/samples?configId=1001&category=INJECTION&limit=20&offset=0
+GET /v1/events/samples?configId=1001&category=INJECTION&limit=20&page=0
 ```
 
 ### Define Alert Rule (Bonus)
@@ -91,6 +91,47 @@ GET /v1/alerts/evaluate
 POST /dev/generate?count=500&configId=1001
 ```
 
+## Storage Choice & Big-Data Justification
+
+**This implementation uses PostgreSQL.** Here is the reasoning and the honest trade-off analysis for production scale.
+
+### Why PostgreSQL for this assignment
+
+PostgreSQL gives us strong ACID guarantees, a mature JDBC/JPA ecosystem, and zero operational overhead for a take-home. Every enriched event is written exactly once and deduplicated by primary key (`eventId`), which maps naturally to a relational `UNIQUE` constraint. The aggregation queries (`GROUP BY category`, top-attackers, top-paths) are trivially expressed in SQL and execute in the DB engine rather than in Java heap.
+
+### Honest limits at big-data scale
+
+A real WAF analytics system at Akamai scale ingests **millions of events per second** across thousands of customer configs. PostgreSQL hits a wall in three places:
+
+| Bottleneck | Why it hurts | Production answer |
+|---|---|---|
+| Single-node write throughput | Even with partitioning, one Postgres primary saturates ~50–100k inserts/sec | Apache Kafka → stream consumers → columnar store |
+| Hot time-range scans | `SELECT … WHERE timestamp BETWEEN` on a 10-billion-row table is slow even with indexes | Time-series DB (TimescaleDB, ClickHouse, Apache Druid) |
+| Cross-shard aggregation | `topAttackers` across all configIds requires a full table scan | Pre-aggregated materialized views or stream-time rollups |
+
+### What the production architecture would look like
+
+```
+WAF edge nodes
+    │  (Kafka topics, partitioned by configId)
+    ▼
+Stream processor (Flink / Kafka Streams)
+    │  enrichment, threat scoring, repeat-offender detection (Redis)
+    ├──► ClickHouse / Apache Druid   ← stats & aggregation queries
+    └──► S3 / object store           ← raw event archive (compliance)
+
+API layer reads from ClickHouse for /stats and /samples
+Alert evaluation runs as a continuous streaming query, not on-demand
+```
+
+### Why the code is still production-ready as-is
+
+The DAL is fully abstracted behind `EventRepository` (JPA interface). Swapping PostgreSQL for ClickHouse, TimescaleDB, or Cassandra requires only:
+1. A new `application-<profile>.yml` with the target datasource
+2. A new Spring profile — zero service or controller changes
+
+This is the **IoC / DAL design** principle demonstrated by the implementation.
+
 ## IoC / DAL Design
 
 Database is swappable via Spring profile — no code changes needed:
@@ -100,7 +141,22 @@ Database is swappable via Spring profile — no code changes needed:
 | `h2` (default) | H2 in-memory | Local dev, unit tests |
 | `postgres` | PostgreSQL | Staging, production |
 
-The `RepeatOffenderCache` is also injected via IoC (`CacheConfig`). Swap `InMemoryRepeatOffenderCache` for a Redis-backed implementation without touching service code.
+The `RepeatOffenderCache` is also injected via IoC (`CacheConfig`), selected by a single config property:
+
+| `wsa.cache.redis.enabled` | Implementation | Use case |
+|---|---|---|
+| `false` (default) | `InMemoryRepeatOffenderCache` | Dev, single-instance staging |
+| `true` | `RedisRepeatOffenderCache` (sorted sets) | Production, multi-instance |
+
+## Async Ingestion
+
+Ingest returns `202 Accepted` immediately. The actual DB write happens on a `ThreadPoolTaskExecutor` (core 4, max 16, queue 1000). When the queue is full, `CallerRunsPolicy` applies backpressure instead of dropping events.
+
+Timestamp validation (future-timestamp check) runs synchronously before the async dispatch — callers get `422` immediately, not a silent async failure.
+
+## Schema Management
+
+PostgreSQL schema is owned by Flyway (`src/main/resources/db/migration/V1__initial_schema.sql`). Hibernate is set to `ddl-auto: validate` — it verifies the schema matches entities but never modifies it. H2 (dev/test) uses `create-drop` with Flyway disabled.
 
 ## Running Tests
 

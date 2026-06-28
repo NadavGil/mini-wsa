@@ -63,18 +63,31 @@ com.akamai.miniwsa
 │   ├── ThreatScoreCalculator.java                  (@Component)
 │   ├── EnrichmentPipeline.java                     (@Component)
 │   ├── RepeatOffenderCache.java                    (interface)
-│   └── InMemoryRepeatOffenderCache.java            (@Component)
+│   ├── InMemoryRepeatOffenderCache.java            (@Component)
+│   └── RedisRepeatOffenderCache.java               (Redis sorted-set impl, owned by CacheConfig)
 │
 ├── web
-│   ├── EventController.java                        (@RestController)
+│   ├── EventController.java                        (@RestController — 202 Accepted)
 │   ├── StatsController.java                        (@RestController)
 │   ├── AlertController.java                        (@RestController)
 │   ├── DataGenController.java                      (@RestController, @Profile("dev"))
-│   └── GlobalExceptionHandler.java                 (@RestControllerAdvice)
+│   ├── GlobalExceptionHandler.java                 (@RestControllerAdvice)
+│   └── filter
+│       └── RequestIdFilter.java                    (@Order(MIN_VALUE) — MDC requestId)
 │
-└── config
-    ├── CacheConfig.java
-    └── OpenApiConfig.java
+├── config
+│   ├── AsyncIngestionConfig.java                   (@EnableAsync — ingestionExecutor bean)
+│   ├── CacheConfig.java                            (@ConditionalOnProperty wiring)
+│   ├── OpenApiConfig.java
+│   └── RateLimitConfig.java
+│
+└── repository
+    └── projection
+        ├── CategoryAggregation.java
+        ├── ActionAggregation.java
+        ├── AttackerAggregation.java
+        ├── PathAggregation.java
+        └── CategoryCount.java                      (alert batch evaluation projection)
 ```
 
 ---
@@ -163,7 +176,8 @@ public class EventIngestRequest {
   @NotNull                     Instant timestamp;
   @NotNull                     Long configId;
                                String policyId;
-  @NotBlank                    String clientIp;
+  @NotBlank @Size(max=45)
+  @Pattern(regexp="^[\\d.:a-fA-F]+$") String clientIp;  // IPv4 + IPv6 only; prevents log injection
                                String hostname;
                                String path;
                                String method;
@@ -204,12 +218,21 @@ record EventSampleResponse(
   String attackType, int threatScore, boolean repeatOffender, String country
 ) {}
 
-record SamplesPageResponse(long total, int limit, int offset, List<EventSampleResponse> events) {}
+record SamplesPageResponse(long total, int limit, int page, List<EventSampleResponse> events) {}
 ```
 
 ### Alert DTOs
 
 ```java
+// RuleInfoDto (nested in EventIngestRequest)
+class RuleInfoDto {
+  @NotBlank String ruleId;
+  @NotBlank String ruleName;  // @NotBlank required — blank names are rejected with 400
+  String ruleMessage;         // sanitized (CR/LF stripped) to prevent log injection
+  @NotNull Severity severity;
+  @NotNull AttackCategory category;
+}
+
 // Request
 class AlertRuleRequest {
   @NotBlank String name;
@@ -245,67 +268,61 @@ record ApiError(Instant timestamp, int status, String error,
 ### `EventRepository`
 
 ```java
-public interface EventRepository extends JpaRepository<EnrichedEvent, String> {
-
-  // Repeat offender check
-  long countByClientIpAndTimestampAfter(String clientIp, Instant cutoff);
+public interface EventRepository extends JpaRepository<EnrichedEvent, String>,
+        JpaSpecificationExecutor<EnrichedEvent> {
 
   // Stats: total count in window
   @Query("select count(e) from EnrichedEvent e " +
          "where (:configId is null or e.configId = :configId) " +
          "and e.timestamp between :from and :to")
-  long countInWindow(Long configId, Instant from, Instant to);
+  long countInWindow(@Param("configId") Long configId,
+                     @Param("from") Instant from, @Param("to") Instant to);
 
   // Stats: by category
   @Query("select e.rule.category as category, count(e) as count, " +
          "avg(e.threatScore) as avgThreatScore from EnrichedEvent e " +
          "where (:configId is null or e.configId = :configId) " +
          "and e.timestamp between :from and :to group by e.rule.category")
-  List<CategoryAggregation> aggregateByCategory(Long configId, Instant from, Instant to);
+  List<CategoryAggregation> aggregateByCategory(@Param("configId") Long configId,
+                                                 @Param("from") Instant from, @Param("to") Instant to);
 
   // Stats: by action
   @Query("select e.action as action, count(e) as count from EnrichedEvent e " +
          "where (:configId is null or e.configId = :configId) " +
          "and e.timestamp between :from and :to group by e.action")
-  List<ActionAggregation> aggregateByAction(Long configId, Instant from, Instant to);
+  List<ActionAggregation> aggregateByAction(@Param("configId") Long configId,
+                                             @Param("from") Instant from, @Param("to") Instant to);
 
-  // Stats: top 10 attackers
+  // Stats: top attackers
   @Query("select e.clientIp as clientIp, count(e) as count, " +
          "avg(e.threatScore) as avgThreatScore from EnrichedEvent e " +
          "where (:configId is null or e.configId = :configId) " +
          "and e.timestamp between :from and :to " +
          "group by e.clientIp order by count(e) desc")
-  List<AttackerAggregation> topAttackers(Long configId, Instant from, Instant to, Pageable p);
+  List<AttackerAggregation> topAttackers(@Param("configId") Long configId,
+                                          @Param("from") Instant from, @Param("to") Instant to,
+                                          Pageable pageable);
 
-  // Stats: top 10 paths
+  // Stats: top paths
   @Query("select e.path as path, count(e) as count from EnrichedEvent e " +
          "where (:configId is null or e.configId = :configId) " +
          "and e.timestamp between :from and :to " +
          "group by e.path order by count(e) desc")
-  List<PathAggregation> topPaths(Long configId, Instant from, Instant to, Pageable p);
+  List<PathAggregation> topPaths(@Param("configId") Long configId,
+                                  @Param("from") Instant from, @Param("to") Instant to,
+                                  Pageable pageable);
 
-  // Samples: dynamic filters
-  @Query("select e from EnrichedEvent e " +
-         "where (:configId is null or e.configId = :configId) " +
-         "and (:from is null or e.timestamp >= :from) " +
-         "and (:to is null or e.timestamp <= :to) " +
-         "and (:category is null or e.rule.category = :category) " +
-         "and (:action is null or e.action = :action) " +
-         "order by e.timestamp desc")
-  List<EnrichedEvent> findSamples(Long configId, Instant from, Instant to,
-                                  AttackCategory category, ActionType action, Pageable p);
+  // Alert evaluation: batch — one GROUP BY query per distinct windowMinutes.
+  // Replaces the old N+1 pattern (one countByRuleCategoryAndTimestampAfter per rule).
+  @Query("select e.rule.category as category, count(e) as count " +
+         "from EnrichedEvent e " +
+         "where e.rule.category in :categories and e.timestamp >= :from " +
+         "group by e.rule.category")
+  List<CategoryCount> countByCategoriesFrom(@Param("categories") List<AttackCategory> categories,
+                                             @Param("from") Instant from);
 
-  @Query("select count(e) from EnrichedEvent e " +
-         "where (:configId is null or e.configId = :configId) " +
-         "and (:from is null or e.timestamp >= :from) " +
-         "and (:to is null or e.timestamp <= :to) " +
-         "and (:category is null or e.rule.category = :category) " +
-         "and (:action is null or e.action = :action)")
-  long countSamples(Long configId, Instant from, Instant to,
-                    AttackCategory category, ActionType action);
-
-  // Alert evaluation
-  long countByRuleCategoryAndTimestampAfter(AttackCategory category, Instant cutoff);
+  // Samples: dynamic WHERE built via JpaSpecificationExecutor — no @Query needed.
+  // SamplesService passes a Specification<EnrichedEvent> built from filter params.
 }
 ```
 
@@ -315,6 +332,7 @@ interface CategoryAggregation { AttackCategory getCategory(); long getCount(); d
 interface ActionAggregation   { ActionType getAction(); long getCount(); }
 interface AttackerAggregation { String getClientIp(); long getCount(); double getAvgThreatScore(); }
 interface PathAggregation     { String getPath(); long getCount(); }
+interface CategoryCount       { AttackCategory getCategory(); long getCount(); }  // alert batch eval
 ```
 
 ### `AlertRepository`
@@ -329,17 +347,34 @@ public interface AlertRepository extends JpaRepository<AlertRule, String> { }
 
 ### `EventIngestionService`
 
-**Flow:** `EventIngestRequest` → copy fields → `enrich()` → `saveAll()` → return IDs.
+**Flow:** Controller → `validateTimestamps()` (sync, 422 on fail) → `ingestAsync()` fire-and-forget → `202 Accepted`. Worker thread: `toEntity()` → `enrichWithoutRecording()` → `saveAll()` → `afterCommit` hook → `recordInCache()` + counter increment.
 
 ```java
-@Service @Transactional
+@Service @Slf4j
 public class EventIngestionService {
+
+  /** Synchronous timestamp guard — called by controller before async dispatch. */
+  public void validateTimestamps(List<EventIngestRequest> requests);
+
+  /** Async entry point. @Async + @Transactional — HTTP thread returns 202 immediately. */
+  @Async("ingestionExecutor")
+  @Transactional
+  public void ingestAsync(List<EventIngestRequest> requests);
+
+  /** Synchronous path used by integration tests. */
+  @Transactional
   public List<String> ingest(List<EventIngestRequest> requests);
+
+  // Shared core: enrich → saveAll → register afterCommit hook (cache + metrics)
+  private List<String> doIngest(List<EventIngestRequest> requests);
   private EnrichedEvent toEntity(EventIngestRequest req);
 }
 ```
 
-Ingest is **atomic per batch**: one invalid row → 400 for whole call (validation done at controller layer before service is invoked).
+Key design decisions:
+- `@Transactional` on individual methods (not class) to prevent accidental propagation into helpers.
+- `afterCommit` hook: `TransactionSynchronizationManager.registerSynchronization()` runs `recordInCache()` only after durable commit — prevents cache/DB divergence on rollback (C1 fix).
+- `DataIntegrityViolationException` caught in `ingestAsync()` — duplicate `eventId` is silently discarded; the UNIQUE DB constraint is the idempotency guard.
 
 ### `StatsService`
 
@@ -365,11 +400,19 @@ public class SamplesService {
 ### `AlertService`
 
 ```java
-@Service @Transactional
+@Service
 public class AlertService {
-  public AlertRuleResponse define(AlertRuleRequest req);
+  /** synchronized — prevents TOCTOU race on max-rules count-check. */
+  @Transactional
+  public synchronized AlertRuleResponse define(AlertRuleRequest req);
+
+  /**
+   * Batched evaluation: groups rules by windowMinutes → one countByCategoriesFrom
+   * query per group → at most K queries where K = distinct window sizes.
+   * Uses composite key "windowMinutes:CATEGORY" to support same category in different windows.
+   */
+  @Transactional(readOnly = true)
   public List<AlertEvaluationResult> evaluateAll();
-  // evaluate: for each rule, count events in window, firing = count >= threshold
 }
 ```
 
@@ -407,20 +450,26 @@ Max raw = 90 (CRITICAL+DENY+path+repeat), cap is a safety net for future weight 
 
 ### `EnrichmentPipeline`
 
+Two methods replace the old single `enrich()` to implement the afterCommit pattern (C1 fix):
+
 ```java
-public EnrichedEvent enrich(EnrichedEvent e) {
-  // 1. Check repeat-offender BEFORE recording this event
+/** Phase 1 — called inside the transaction. Computes all fields; NO cache writes. */
+public EnrichedEvent enrichWithoutRecording(EnrichedEvent e) {
   boolean repeat = cache.isRepeatOffender(e.getClientIp(), e.getTimestamp());
-  // 2. Record this event in cache
-  cache.record(e.getClientIp(), e.getTimestamp());
-  // 3. Set enriched fields
   e.setRepeatOffender(repeat);
   e.setAttackType(mapper.map(e.getRule().getCategory()));
   e.setThreatScore(calculator.calculate(
       e.getRule().getSeverity(), e.getAction(), e.getPath(), repeat));
   return e;
 }
+
+/** Phase 2 — called in the afterCommit hook, outside the transaction. */
+public void recordInCache(EnrichedEvent e) {
+  cache.record(e.getClientIp(), e.getTimestamp());
+}
 ```
+
+This two-phase split ensures: if the DB write rolls back, `recordInCache()` is never called and the repeat-offender cache stays consistent with the database.
 
 ---
 
@@ -456,7 +505,22 @@ public void record(String ip, Instant eventTime) {
 public void scheduledPrune() { /* remove empty deques, prune stale entries */ }
 ```
 
-A `JpaRepeatOffenderCache` alternative delegates to `EventRepository.countByClientIpAndTimestampAfter` for stateless/clustered deployments.
+### `RedisRepeatOffenderCache`
+
+Production-grade distributed implementation using Redis sorted sets:
+
+```
+Key:    "wsa:ro:{clientIp}"
+Member: "{epochMs}:{UUID}"  — UUID suffix handles sub-millisecond collisions
+Score:  epoch_ms
+
+isRepeatOffender: redis.opsForZSet().count(key, windowStartMs, nowMs) >= threshold  — O(log N)
+record:  ZADD key score member
+         ZREMRANGEBYSCORE key 0 (windowStartMs - 1)   — prune expired entries
+         EXPIRE key (windowMinutes + 1) * 60          — TTL bound memory
+```
+
+Selected via `@ConditionalOnProperty(name = "wsa.cache.redis.enabled", havingValue = "true")` in `CacheConfig`. Falls back to `InMemoryRepeatOffenderCache` via `@ConditionalOnMissingBean` when Redis is not enabled.
 
 ---
 
@@ -468,8 +532,8 @@ A `JpaRepeatOffenderCache` alternative delegates to `EventRepository.countByClie
 @PostMapping("/ingest")
 ResponseEntity<IngestResponse> ingest(@RequestBody JsonNode body);
 // Accepts single object OR array — detect via node.isArray()
-// Validate each element, collect violations, return 400 if any
-// Returns: 201 { "ingested": N, "eventIds": [...] }
+// Calls validateTimestamps() synchronously → 422 on future timestamps
+// Calls ingestAsync() fire-and-forget → 202 Accepted { "queued": N, "eventIds": [...] }
 
 @GetMapping("/samples")
 SamplesPageResponse samples(
@@ -479,7 +543,7 @@ SamplesPageResponse samples(
   @RequestParam(required=false) AttackCategory category,
   @RequestParam(required=false) ActionType action,
   @RequestParam(defaultValue="20") @Max(100) int limit,
-  @RequestParam(defaultValue="0") int offset
+  @RequestParam(defaultValue="0") int page          // page-number (0-indexed), replaces offset
 );
 ```
 
@@ -555,26 +619,80 @@ spring:
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:wsa}
-    username: ${DB_USER:wsa}
-    password: ${DB_PASSWORD:wsa}
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:miniwsa}
+    username: ${DB_USER:miniwsa}
+    password: ${DB_PASSWORD:miniwsa_secret}
+    hikari:
+      minimum-idle: 5
+      connection-timeout: 5000
+      keepalive-time: 60000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration   # V1__initial_schema.sql owns all DDL
   jpa:
-    hibernate.ddl-auto: validate
+    hibernate.ddl-auto: validate        # Hibernate validates only; Flyway manages schema
     properties.hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
+```
+
+### `application-h2.yml`
+
+```yaml
+spring:
+  flyway:
+    enabled: false   # Flyway disabled for H2 — JPA create-drop handles test schema
+  jpa:
+    hibernate.ddl-auto: create-drop
 ```
 
 ### `CacheConfig`
 
 ```java
-@Configuration
+@Configuration @EnableScheduling
 public class CacheConfig {
-  @Bean @Profile("!postgres")
-  public RepeatOffenderCache inMemoryCache() {
-    return new InMemoryRepeatOffenderCache();
+
+  /** Active when wsa.cache.redis.enabled=true. Requires spring.data.redis.* config. */
+  @Bean
+  @ConditionalOnProperty(name = "wsa.cache.redis.enabled", havingValue = "true")
+  public RepeatOffenderCache redisRepeatOffenderCache(
+      StringRedisTemplate redis,
+      @Value("${wsa.cache.window-minutes:10}") int windowMinutes,
+      @Value("${wsa.cache.repeat-offender-threshold:5}") int threshold) {
+    return new RedisRepeatOffenderCache(redis, Duration.ofMinutes(windowMinutes), threshold);
   }
-  @Bean @Profile("postgres")
-  public RepeatOffenderCache jpaCache(EventRepository repo) {
-    return new JpaRepeatOffenderCache(repo);
+
+  /** Fallback when Redis is not enabled. Warns in Javadoc: degrades on 2+ instances. */
+  @Bean
+  @ConditionalOnMissingBean(RepeatOffenderCache.class)
+  public RepeatOffenderCache inMemoryRepeatOffenderCache(
+      @Value("${wsa.cache.window-minutes:10}") int windowMinutes,
+      @Value("${wsa.cache.repeat-offender-threshold:5}") int threshold,
+      @Value("${wsa.cache.max-ip-entries:10000}") int maxEntries) {
+    return new InMemoryRepeatOffenderCache(windowMinutes, threshold, maxEntries);
+  }
+}
+```
+
+### `AsyncIngestionConfig`
+
+```java
+@Configuration @EnableAsync
+public class AsyncIngestionConfig {
+
+  @Bean("ingestionExecutor")
+  public Executor ingestionExecutor(
+      @Value("${wsa.ingestion.async.core-pool-size:4}") int coreSize,
+      @Value("${wsa.ingestion.async.max-pool-size:16}") int maxSize,
+      @Value("${wsa.ingestion.async.queue-capacity:1000}") int queueCapacity) {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(coreSize);
+    executor.setMaxPoolSize(maxSize);
+    executor.setQueueCapacity(queueCapacity);
+    executor.setThreadNamePrefix("wsa-ingest-");
+    // CallerRunsPolicy: when queue is full, the calling thread (Tomcat) runs the task.
+    // This provides backpressure — slows callers rather than dropping events.
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+    executor.initialize();
+    return executor;
   }
 }
 ```
@@ -628,12 +746,16 @@ Also available as `@Component CommandLineRunner @Profile("seed")` reading `wsa.s
 | `InMemoryRepeatOffenderCacheTest` | Unit | 5 prior events → not repeat; 6th → repeat; events outside 10-min window excluded; separate IPs isolated; prune removes stale entries |
 | `AlertEvaluationTest` | Unit (Mockito) | firing when observed ≥ threshold; not firing when below; window boundary (event at exactly cutoff) |
 | `EventRepositoryTest` | `@DataJpaTest` H2 | `countByClientIpAndTimestampAfter`; `aggregateByCategory` counts + avg; `aggregateByAction`; `topAttackers` top-3 ordering; `topPaths`; `findSamples` with null filters; `findSamples` with category+action filter; `countSamples` |
-| `EventIngestionIntegrationTest` | `@SpringBootTest` MockMvc | POST single → 201; POST array → 201 count; invalid `statusCode` → 400 with violations; missing required field → 400; duplicate eventId handling; verify enrichment fields in DB |
-| `StatsSummaryIntegrationTest` | `@SpringBootTest` MockMvc | Seed 20 events; GET summary → totalEvents; byCategory counts; topAttackers sorted desc; topPaths; time-range filter excludes events outside range |
-| `AlertIntegrationTest` | `@SpringBootTest` MockMvc | define → 201; evaluate with seeded events above threshold → firing; evaluate below threshold → not firing |
-| `SamplesIntegrationTest` | `@SpringBootTest` MockMvc | Pagination (limit=5 offset=5); filter by category; filter by action; `total` correct with filter; timestamp desc ordering |
+| `EventIngestionIntegrationTest` | `@SpringBootTest` MockMvc | POST single → **202**; POST array → 202 with `queued` count; invalid `statusCode` → 400; missing required field → 400; future timestamp → 422; invalid IP → 400; duplicate eventId → both 202 (async idempotency) |
+| `StatsSummaryIntegrationTest` | `@SpringBootTest` MockMvc | Seed events; GET summary → totalEvents; byCategory counts; topAttackers sorted desc; topPaths; `?page=0` pagination |
+| `AlertIntegrationTest` | `@SpringBootTest` MockMvc | define → 201; evaluate with seeded events ≥ threshold → firing; evaluate below threshold → not firing |
+| `SamplesIntegrationTest` | `@SpringBootTest` MockMvc | Pagination (`?page=0`, `?page=1`); filter by category; filter by action; total correct with filter; timestamp desc ordering |
 
-Test infra: `@ActiveProfiles("h2")` on all integration tests; `@Transactional` + `@Rollback` per test method; deterministic `Clock` bean (`Clock.fixed(...)`) injected for repeat-offender window tests.
+Test infra:
+- `@ActiveProfiles("h2")` on all integration tests (Flyway disabled, H2 create-drop).
+- `@TestConfiguration` inner class overrides `ingestionExecutor` with `SyncTaskExecutor` in both `EventIngestionIntegrationTest` and `StatsSummaryIntegrationTest` — makes `@Async` deterministic in tests (events in DB before assertions).
+- `@Transactional` + `@Rollback` per test method for isolation.
+- Deterministic `Clock` bean (`Clock.fixed(...)`) for repeat-offender window tests.
 
 ---
 
@@ -645,32 +767,43 @@ Test infra: `@ActiveProfiles("h2")` on all integration tests; `@Transactional` +
 version: "3.9"
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:15-alpine
     environment:
-      POSTGRES_DB: wsa
-      POSTGRES_USER: wsa
-      POSTGRES_PASSWORD: wsa
+      POSTGRES_DB: miniwsa
+      POSTGRES_USER: miniwsa
+      POSTGRES_PASSWORD: miniwsa_secret
     ports: ["5432:5432"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wsa"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U miniwsa"]
+      interval: 10s
       retries: 5
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
 
   app:
     build: .
     depends_on:
       postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
     environment:
       SPRING_PROFILES_ACTIVE: postgres
       DB_HOST: postgres
-      DB_NAME: wsa
-      DB_USER: wsa
-      DB_PASSWORD: wsa
+      DB_NAME: miniwsa
+      DB_USER: miniwsa
+      DB_PASSWORD: miniwsa_secret
+      SPRING_DATA_REDIS_HOST: redis
+      WSA_CACHE_REDIS_ENABLED: "true"
     ports: ["8080:8080"]
 
 volumes:
-  pgdata:
+  postgres_data:
 ```
 
 ### `Dockerfile`

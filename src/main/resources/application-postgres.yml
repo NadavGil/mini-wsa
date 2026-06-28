@@ -6,11 +6,20 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
-      connection-timeout: 30000
+      minimum-idle: 5
+      connection-timeout: 5000        # fail-fast: don't block Tomcat threads for 30s on DB outage
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      keepalive-time: 60000
   jpa:
     hibernate:
-      ddl-auto: create
+      # NEVER use 'update' in production — Hibernate cannot safely migrate schemas.
+      # Flyway owns all schema changes; Hibernate only validates mappings at startup.
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
     show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration

@@ -9,8 +9,13 @@ spring:
       enabled: false
   jpa:
     hibernate:
+      # Hibernate manages schema for H2 in-memory tests — Flyway is disabled below.
       ddl-auto: create-drop
     show-sql: false
     properties:
       hibernate:
         format_sql: false
+  flyway:
+    # Flyway is for production (postgres profile) only.
+    # H2 tests use Hibernate's create-drop to avoid migration script compatibility issues.
+    enabled: false

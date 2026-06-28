@@ -69,6 +69,35 @@
             <version>2.5.0</version>
         </dependency>
 
+        <!-- Actuator: health, metrics, Prometheus -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Micrometer: custom counters and histograms -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+        </dependency>
+
+        <!-- Redis: optional distributed cache for RepeatOffenderCache (enabled by wsa.cache.redis.enabled) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Flyway: versioned schema migrations (production profile) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <!-- Bucket4j for rate limiting -->
         <dependency>
             <groupId>com.bucket4j</groupId>

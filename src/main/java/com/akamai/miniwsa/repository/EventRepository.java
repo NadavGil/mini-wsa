@@ -6,19 +6,19 @@ import com.akamai.miniwsa.domain.EnrichedEvent;
 import com.akamai.miniwsa.repository.projection.ActionAggregation;
 import com.akamai.miniwsa.repository.projection.AttackerAggregation;
 import com.akamai.miniwsa.repository.projection.CategoryAggregation;
+import com.akamai.miniwsa.repository.projection.CategoryCount;
 import com.akamai.miniwsa.repository.projection.PathAggregation;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
 
-public interface EventRepository extends JpaRepository<EnrichedEvent, String> {
-
-    // Repeat offender check
-    long countByClientIpAndTimestampAfter(String clientIp, Instant cutoff);
+public interface EventRepository extends JpaRepository<EnrichedEvent, String>,
+        JpaSpecificationExecutor<EnrichedEvent> {
 
     // Stats: total events in window (null configId = all configs)
     @Query("select count(e) from EnrichedEvent e " +
@@ -68,33 +68,13 @@ public interface EventRepository extends JpaRepository<EnrichedEvent, String> {
                                     @Param("to") Instant to,
                                     Pageable pageable);
 
-    // Samples: dynamic filters (all nullable)
-    @Query("select e from EnrichedEvent e " +
-           "where (:configId is null or e.configId = :configId) " +
-           "and (:from is null or e.timestamp >= :from) " +
-           "and (:to is null or e.timestamp <= :to) " +
-           "and (:category is null or e.rule.category = :category) " +
-           "and (:action is null or e.action = :action) " +
-           "order by e.timestamp desc")
-    List<EnrichedEvent> findSamples(@Param("configId") Long configId,
-                                     @Param("from") Instant from,
-                                     @Param("to") Instant to,
-                                     @Param("category") AttackCategory category,
-                                     @Param("action") ActionType action,
-                                     Pageable pageable);
-
-    @Query("select count(e) from EnrichedEvent e " +
-           "where (:configId is null or e.configId = :configId) " +
-           "and (:from is null or e.timestamp >= :from) " +
-           "and (:to is null or e.timestamp <= :to) " +
-           "and (:category is null or e.rule.category = :category) " +
-           "and (:action is null or e.action = :action)")
-    long countSamples(@Param("configId") Long configId,
-                      @Param("from") Instant from,
-                      @Param("to") Instant to,
-                      @Param("category") AttackCategory category,
-                      @Param("action") ActionType action);
-
-    // Alert evaluation: count events of a given category after a cutoff
-    long countByRuleCategoryAndTimestampAfter(AttackCategory category, Instant cutoff);
+    // Alert evaluation: batch count — one query for all categories within a shared window.
+    // Replaces the N+1 pattern (one query per rule) with a single GROUP BY query.
+    // Rules with different windowMinutes must be batched separately by the caller.
+    @Query("select e.rule.category as category, count(e) as count " +
+           "from EnrichedEvent e " +
+           "where e.rule.category in :categories and e.timestamp >= :from " +
+           "group by e.rule.category")
+    List<CategoryCount> countByCategoriesFrom(@Param("categories") List<AttackCategory> categories,
+                                               @Param("from") Instant from);
 }
