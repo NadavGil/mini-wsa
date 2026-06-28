@@ -13,6 +13,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +29,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class EventController {
 
-    private static final int MAX_BATCH_SIZE = 500;
+    @Value("${wsa.ingestion.max-batch-size:500}")
+    private int maxBatchSize;
 
     private final EventIngestionService ingestionService;
     private final SamplesService samplesService;
@@ -38,16 +40,16 @@ public class EventController {
 
     /**
      * POST /v1/events/ingest
-     * Accepts a single event object or an array of up to 500 events.
+     * Accepts a single event object or an array of up to {@code wsa.ingestion.max-batch-size} events (default 500).
      */
     @PostMapping("/ingest")
     public ResponseEntity<Map<String, Object>> ingest(@RequestBody JsonNode body) {
         List<EventIngestRequest> requests;
 
         if (body.isArray()) {
-            if (body.size() > MAX_BATCH_SIZE) {
+            if (body.size() > maxBatchSize) {
                 throw new BatchTooLargeException(
-                        "Batch size " + body.size() + " exceeds maximum of " + MAX_BATCH_SIZE);
+                        "Batch size " + body.size() + " exceeds maximum of " + maxBatchSize);
             }
             requests = objectMapper.convertValue(body,
                     objectMapper.getTypeFactory().constructCollectionType(
