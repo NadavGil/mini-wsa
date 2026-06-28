@@ -284,6 +284,50 @@
   footer a { color: var(--accent); text-decoration: none; }
   footer a:hover { text-decoration: underline; }
 
+  /* ── Bugs board ── */
+  .resolved-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(63,185,80,0.12);
+    color: var(--green);
+    border: 1px solid rgba(63,185,80,0.3);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .board-summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(63,185,80,0.06);
+    border: 1px solid rgba(63,185,80,0.2);
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .board-stat { font-size: 0.82rem; color: var(--muted); }
+  .board-stat strong { color: #fff; font-size: 1rem; }
+  .board-progress {
+    flex: 1;
+    min-width: 120px;
+    height: 6px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .board-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--green), #39d353);
+    width: 100%;
+    transition: width 0.4s ease;
+  }
+
   /* ── Origin prompt ── */
   .prompt-section {
     margin-bottom: 48px;
@@ -632,9 +676,17 @@ For any blockers, ping me, so I can decide how to unblock.</div>
 </div><!-- /phases -->
 
 <!-- ── Board Review ── -->
-<h2 class="section-title">📋 Board Review — Findings &amp; Fixes</h2>
+<h2 class="section-title">📋 Board Review — Bugs Board</h2>
 <div style="margin-bottom:48px">
-  <p style="font-size:0.85rem;color:var(--muted);margin-bottom:20px">Post-delivery board code review identified 2 critical, 7 major, and 6 minor issues. All were resolved in a dedicated hardening sprint.</p>
+  <div class="board-summary">
+    <div class="board-stat"><strong>15</strong> total findings</div>
+    <div class="board-stat"><strong style="color:var(--green)">15</strong> resolved</div>
+    <div class="board-stat"><strong style="color:var(--red)">2</strong> critical</div>
+    <div class="board-stat"><strong style="color:var(--orange)">7</strong> major</div>
+    <div class="board-stat"><strong style="color:var(--accent)">6</strong> minor</div>
+    <div class="board-progress"><div class="board-progress-fill"></div></div>
+    <span style="font-size:0.8rem;font-weight:700;color:var(--green)">100% closed · v0.8-board-fixes</span>
+  </div>
 
   <!-- Critical -->
   <div style="margin-bottom:20px">
@@ -645,10 +697,12 @@ For any blockers, ping me, so I can decide how to unblock.</div>
       <div class="msg">
         <span class="from" style="color:var(--red);min-width:28px">C1</span>
         <span class="content"><strong style="color:#fff">Cache poisoning on rollback</strong> — <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">cache.record()</code> called inside transaction; rollback left ghost IPs in repeat-offender cache. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">TransactionSynchronizationManager.afterCommit()</code> — cache only written after durable DB commit.</span>
+        <span class="resolved-badge">✓ RESOLVED</span>
       </div>
       <div class="msg">
         <span class="from" style="color:var(--red);min-width:28px">C2</span>
         <span class="content"><strong style="color:#fff">Synchronous ingestion blocks I/O thread</strong> — Tomcat thread held for full DB write duration, limiting pipeline throughput. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">@Async("ingestionExecutor")</code> fire-and-forget; returns <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">202 Accepted</code> immediately; <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">CallerRunsPolicy</code> provides backpressure; timestamp validation stays synchronous for fast 4xx.</span>
+        <span class="resolved-badge">✓ RESOLVED</span>
       </div>
     </div>
   </div>
@@ -662,30 +716,37 @@ For any blockers, ping me, so I can decide how to unblock.</div>
       <div class="msg">
         <span class="from" style="color:var(--orange);min-width:28px">M1</span>
         <span class="content"><strong style="color:#fff">JPA INSERT vs MERGE ambiguity</strong> — client-supplied PK triggered <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">merge()</code> (SELECT + INSERT) on new entity. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">EnrichedEvent implements Persistable&lt;String&gt;</code> — forces <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">persist()</code> always.</span>
+        <span class="resolved-badge">✓ RESOLVED</span>
       </div>
       <div class="msg">
         <span class="from" style="color:var(--orange);min-width:28px">M2</span>
         <span class="content"><strong style="color:#fff">In-memory cache broken at multi-instance scale</strong> — each pod held independent attacker state; attacks split across pods went undetected. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">RedisRepeatOffenderCache</code> using sorted sets; selected via <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">@ConditionalOnProperty(wsa.cache.redis.enabled)</code>.</span>
+        <span class="resolved-badge">✓ RESOLVED</span>
       </div>
       <div class="msg">
         <span class="from" style="color:var(--orange);min-width:28px">M3</span>
         <span class="content"><strong style="color:#fff">N+1 alert evaluation queries</strong> — one DB query per rule regardless of shared window. Fix: rules grouped by <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">windowMinutes</code>; one <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">GROUP BY rule_category</code> per group; composite key <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">"windowMinutes:CATEGORY"</code> avoids collision.</span>
+        <span class="resolved-badge">✓ RESOLVED</span>
       </div>
       <div class="msg">
         <span class="from" style="color:var(--orange);min-width:28px">M4</span>
         <span class="content"><strong style="color:#fff">Future-timestamp check in async path</strong> — validation ran inside async task; caller never received 422. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">validateTimestamps()</code> extracted and called synchronously before async dispatch.</span>
+        <span class="resolved-badge">✓ RESOLVED</span>
       </div>
       <div class="msg">
         <span class="from" style="color:var(--orange);min-width:28px">M5</span>
         <span class="content"><strong style="color:#fff">clientIp not validated</strong> — any arbitrary string accepted; log injection risk. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">@Size(max=45) @Pattern(regexp="^[\\d.:a-fA-F]+$")</code> on <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">EventIngestRequest.clientIp</code>.</span>
+        <span class="resolved-badge">✓ RESOLVED</span>
       </div>
       <div class="msg">
         <span class="from" style="color:var(--orange);min-width:28px">M6</span>
         <span class="content"><strong style="color:#fff">ruleName missing @NotBlank</strong> — blank or missing rule names persisted silently. Fix: <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">@NotBlank</code> added to <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">RuleInfoDto.ruleName</code>.</span>
+        <span class="resolved-badge">✓ RESOLVED</span>
       </div>
       <div class="msg">
         <span class="from" style="color:var(--orange);min-width:28px">M7</span>
         <span class="content"><strong style="color:#fff">Broken pagination integer division</strong> — <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">pageNumber = offset / limit</code> produced wrong page numbers; page 0 repeated. Fix: page-number model (<code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">?page=0</code>); <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">PageRequest.of(page, limit)</code> directly.</span>
+        <span class="resolved-badge">✓ RESOLVED</span>
       </div>
     </div>
   </div>
@@ -697,7 +758,7 @@ For any blockers, ping me, so I can decide how to unblock.</div>
     </div>
     <div class="parallel-grid">
       <div class="parallel-box">
-        <div class="agent-name" style="color:var(--accent)">Code Quality</div>
+        <div class="agent-name" style="color:var(--accent)">Code Quality <span class="resolved-badge" style="margin-left:6px;font-size:0.63rem">✓ 3/3</span></div>
         <ul>
           <li>m1: Dead <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">countByClientIpAndTimestampAfter</code> removed from repository</li>
           <li>m4: <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">synchronized AlertService.define()</code> — TOCTOU race on rule count-check fixed</li>
@@ -705,7 +766,7 @@ For any blockers, ping me, so I can decide how to unblock.</div>
         </ul>
       </div>
       <div class="parallel-box">
-        <div class="agent-name" style="color:var(--accent)">Ops &amp; Observability</div>
+        <div class="agent-name" style="color:var(--accent)">Ops &amp; Observability <span class="resolved-badge" style="margin-left:6px;font-size:0.63rem">✓ 3/3</span></div>
         <ul>
           <li>m2: Flyway <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">V1__initial_schema.sql</code> — schema versioned; <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">ddl-auto: validate</code> in prod</li>
           <li>m3: <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">RequestIdFilter</code> — MDC <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">requestId</code> + <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">X-Request-Id</code> response header for log correlation</li>
