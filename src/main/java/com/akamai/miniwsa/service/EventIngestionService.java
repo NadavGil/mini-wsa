@@ -102,7 +102,7 @@ public class EventIngestionService {
                 .attackType("Unknown")         // overwritten by EnrichmentPipeline
                 .threatScore(0)                // overwritten by EnrichmentPipeline
                 .repeatOffender(false)         // overwritten by EnrichmentPipeline
-                .ingestedAt(Instant.now())
+                .receivedAt(Instant.now())
                 .build();
     }
 

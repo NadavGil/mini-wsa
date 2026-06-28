@@ -92,8 +92,8 @@ public class EnrichedEvent implements Persistable<String> {
     @Column(name = "repeat_offender", nullable = false)
     private boolean repeatOffender;
 
-    @Column(name = "ingested_at", nullable = false)
-    private Instant ingestedAt;
+    @Column(name = "received_at", nullable = false)
+    private Instant receivedAt;
 
     // Persistable: forces JPA to always use persist() (INSERT), never merge() (UPDATE/no-op).
     // Without this, Spring Data calls merge() for non-null String IDs, silently
