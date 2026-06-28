@@ -91,6 +91,47 @@ GET /v1/alerts/evaluate
 POST /dev/generate?count=500&configId=1001
 ```
 
+## Storage Choice & Big-Data Justification
+
+**This implementation uses PostgreSQL.** Here is the reasoning and the honest trade-off analysis for production scale.
+
+### Why PostgreSQL for this assignment
+
+PostgreSQL gives us strong ACID guarantees, a mature JDBC/JPA ecosystem, and zero operational overhead for a take-home. Every enriched event is written exactly once and deduplicated by primary key (`eventId`), which maps naturally to a relational `UNIQUE` constraint. The aggregation queries (`GROUP BY category`, top-attackers, top-paths) are trivially expressed in SQL and execute in the DB engine rather than in Java heap.
+
+### Honest limits at big-data scale
+
+A real WAF analytics system at Akamai scale ingests **millions of events per second** across thousands of customer configs. PostgreSQL hits a wall in three places:
+
+| Bottleneck | Why it hurts | Production answer |
+|---|---|---|
+| Single-node write throughput | Even with partitioning, one Postgres primary saturates ~50–100k inserts/sec | Apache Kafka → stream consumers → columnar store |
+| Hot time-range scans | `SELECT … WHERE timestamp BETWEEN` on a 10-billion-row table is slow even with indexes | Time-series DB (TimescaleDB, ClickHouse, Apache Druid) |
+| Cross-shard aggregation | `topAttackers` across all configIds requires a full table scan | Pre-aggregated materialized views or stream-time rollups |
+
+### What the production architecture would look like
+
+```
+WAF edge nodes
+    │  (Kafka topics, partitioned by configId)
+    ▼
+Stream processor (Flink / Kafka Streams)
+    │  enrichment, threat scoring, repeat-offender detection (Redis)
+    ├──► ClickHouse / Apache Druid   ← stats & aggregation queries
+    └──► S3 / object store           ← raw event archive (compliance)
+
+API layer reads from ClickHouse for /stats and /samples
+Alert evaluation runs as a continuous streaming query, not on-demand
+```
+
+### Why the code is still production-ready as-is
+
+The DAL is fully abstracted behind `EventRepository` (JPA interface). Swapping PostgreSQL for ClickHouse, TimescaleDB, or Cassandra requires only:
+1. A new `application-<profile>.yml` with the target datasource
+2. A new Spring profile — zero service or controller changes
+
+This is the **IoC / DAL design** principle demonstrated by the implementation.
+
 ## IoC / DAL Design
 
 Database is swappable via Spring profile — no code changes needed:
